@@ -104,8 +104,5 @@ A5赛题要求网址：https://www.cnsoftbei.com/content-3-1245-1.html
 
 超过100MB的数据集/预训练模型 下载链接：
 
-分支 命名规范：feature/backend（表明工作性质）-具体功能
-文件名命名规范：backend-具体功能
-函数命名：大驼峰命名法
-变量命名：小驼峰命名法
+
 
