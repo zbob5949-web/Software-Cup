@@ -1,0 +1,13 @@
+﻿.venv/
+node_modules/
+dist/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+.idea/
