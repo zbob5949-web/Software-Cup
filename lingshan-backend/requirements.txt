@@ -1,0 +1,10 @@
+﻿fastapi
+uvicorn[standard]
+pymysql
+bcrypt
+python-dotenv
+requests
+httpx
+python-multipart
+edge-tts
+openai-whisper
