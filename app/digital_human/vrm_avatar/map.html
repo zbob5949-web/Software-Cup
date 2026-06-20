@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>灵山景区地图导航</title>
+<link rel="stylesheet" href="/digital-human-3d/leaflet/leaflet.css" />
+<style>
+  :root { color-scheme: light; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei","PingFang SC",Arial,sans-serif; background: #eef2f5; color: #1a2533; height: 100vh; display: flex; flex-direction: column; }
+
+  /* 顶部栏 */
+  .topbar { z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 18px; background: #fff; border-bottom: 1px solid #e1e6eb; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+  .topbar h1 { font-size: 18px; font-weight: 600; color: #1a2533; white-space: nowrap; }
+  .topbar .badge { display:inline-block; padding:3px 8px; background:#e8f3ff; color:#3385ff; font-size:11px; border-radius:4px; margin-left:6px; }
+  .topbar select { background: #f5f7fa; color: #1a2533; border: 1px solid #d8dfe6; border-radius: 4px; padding: 6px 12px; font-size: 13px; cursor: pointer; min-width:200px; }
+  .topbar select:hover { border-color: #3385ff; }
+  .topbar button { background: #fff; color: #1a2533; border: 1px solid #d8dfe6; border-radius: 4px; padding: 6px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .topbar button:hover { border-color: #3385ff; color: #3385ff; }
+  .topbar button.locating { color: #8b9aab; border-color: #d8dfe6; cursor: wait; }
+  .topbar a { color: #5a6b7e; text-decoration: none; font-size: 13px; margin-left: auto; padding: 6px 10px; border: 1px solid #d8dfe6; border-radius: 4px; }
+  .topbar a:hover { color: #3385ff; border-color: #3385ff; }
+
+  /* 主体：左侧导航面板 + 右侧地图 */
+  .main { flex: 1; display: flex; min-height: 0; position: relative; }
+  .sidebar { width: 360px; background: #fff; border-right: 1px solid #e1e6eb; display: flex; flex-direction: column; overflow: hidden; transition: width 0.2s ease, transform 0.2s ease; }
+  .sidebar.collapsed { width: 0; border-right: 0; transform: translateX(-100%); }
+  .sidebar-toggle { position: absolute; left: 372px; top: 18px; z-index: 20; border: 1px solid #d8dfe6; background: #fff; color: #1a2533; width: 34px; height: 34px; border-radius: 6px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transition: left 0.2s ease; }
+  .sidebar-toggle.collapsed { left: 12px; }
+  #map { flex: 1; z-index: 1; }
+
+  /* 路线选择卡片 */
+  .route-list { flex: 1; overflow-y: auto; }
+  .route-list::-webkit-scrollbar { width: 6px; }
+  .route-list::-webkit-scrollbar-thumb { background: #c8d0d8; border-radius: 3px; }
+
+  .route-empty { padding: 30px 20px; text-align: center; color: #8b9aab; font-size: 13px; line-height: 1.7; }
+  .route-empty .icon { font-size: 36px; display:block; margin-bottom: 10px; }
+
+  .route-card { padding: 14px 18px; border-bottom: 1px solid #eef2f5; cursor: pointer; transition: background 0.15s; }
+  .route-card:hover { background: #f7f9fc; }
+  .route-card.active { background: #f0f7ff; border-left: 3px solid #3385ff; padding-left: 15px; }
+  .route-card .title { font-size: 15px; font-weight: 600; color: #1a2533; display: flex; align-items: center; gap: 8px; }
+  .route-card .title .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .route-card .meta { margin-top: 6px; font-size: 12px; color: #5a6b7e; display: flex; gap: 12px; flex-wrap: wrap; }
+  .route-card .meta span { display: inline-flex; align-items: center; gap: 3px; }
+  .route-card .difficulty { background: #fff5e6; color: #f76b1c; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  .route-card.recommend { border-left: 3px solid transparent; }
+  .route-card.recommend.active { border-left-color: #f76b1c; }
+  .route-card .desc { margin-top: 6px; font-size: 12px; color: #6b7280; line-height: 1.5; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid #eef2f5; background: #fbfcfe; }
+  .section-head h2 { font-size: 14px; color: #1a2533; }
+  .section-head span { font-size: 11px; color: #7a8a9d; }
+  .interest-bar { display: flex; gap: 8px; padding: 12px 18px; border-bottom: 1px solid #eef2f5; flex-wrap: wrap; }
+  .interest-chip { border: 1px solid #d8dfe6; background: #fff; color: #475569; border-radius: 999px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  .interest-chip.active { border-color: #3385ff; color: #3385ff; background: #eff6ff; }
+  .recommend-list { border-top: 1px solid #eef2f5; }
+
+  /* 导航详情面板（百度地图样式） */
+  .nav-panel { display: none; flex-direction: column; height: 100%; }
+  .nav-panel.active { display: flex; }
+
+  .nav-header { padding: 14px 18px; background: linear-gradient(135deg, #3385ff 0%, #1f6ad9 100%); color: #fff; }
+  .nav-header .row1 { display: flex; align-items: center; gap: 8px; }
+  .nav-header .back { cursor: pointer; padding: 2px 8px 2px 0; font-size: 18px; }
+  .nav-header .name { font-size: 16px; font-weight: 600; flex: 1; }
+  .nav-header .start-end { margin-top: 12px; font-size: 13px; line-height: 1.7; }
+  .nav-header .start-end .endpoint { display: flex; align-items: flex-start; gap: 8px; }
+  .nav-header .endpoint .pin { font-weight: bold; min-width: 16px; text-align: center; padding-top: 1px; }
+  .nav-header .summary { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.25); display: flex; gap: 18px; font-size: 12px; }
+  .nav-header .summary b { font-size: 17px; font-weight: 600; display: block; margin-bottom: 2px; }
+
+  .nav-actions { display: flex; gap: 10px; padding: 10px 18px; background: #fafbfd; border-bottom: 1px solid #eef2f5; }
+  .nav-actions button { flex: 1; padding: 8px; border: 1px solid #d8dfe6; background: #fff; color: #1a2533; border-radius: 4px; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .nav-actions button:hover { border-color: #3385ff; color: #3385ff; }
+  .nav-actions button.primary { background: #3385ff; color: #fff; border-color: #3385ff; }
+  .nav-actions button.primary:hover { background: #1f6ad9; }
+  .nav-actions button.primary.playing { background: #ef4444; border-color: #ef4444; }
+
+  .nav-steps { flex: 1; overflow-y: auto; padding: 10px 0; }
+  .nav-steps::-webkit-scrollbar { width: 6px; }
+  .nav-steps::-webkit-scrollbar-thumb { background: #c8d0d8; border-radius: 3px; }
+
+  .step { display: flex; padding: 10px 18px; cursor: pointer; transition: background 0.12s; position: relative; }
+  .step:hover { background: #f7f9fc; }
+  .step.active { background: #f0f7ff; }
+  .step .left { position: relative; width: 28px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+  .step .marker { width: 22px; height: 22px; border-radius: 50%; background: #3385ff; color: #fff; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; z-index: 2; }
+  .step.start .marker { background: #10b563; }
+  .step.end .marker { background: #ef4444; }
+  .step .line { position: absolute; top: 22px; bottom: -10px; width: 2px; background: #d8dfe6; left: 50%; transform: translateX(-50%); }
+  .step:last-child .line { display: none; }
+  .step .body { flex: 1; margin-left: 10px; }
+  .step .name { font-size: 14px; font-weight: 600; color: #1a2533; }
+  .step .instruction { margin-top: 4px; font-size: 12px; color: #5a6b7e; line-height: 1.6; }
+  .step .seg { margin-top: 6px; padding: 4px 8px; background: #f5f7fa; border-radius: 4px; font-size: 11px; color: #5a6b7e; display: inline-flex; gap: 8px; }
+  .step .seg b { color: #3385ff; font-weight: 600; }
+
+  /* 自定义图标 */
+  .marker-icon { font-size: 20px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.25)); cursor: pointer; }
+  .marker-pin { width: 30px; height: 38px; position: relative; }
+  .marker-pin .pin-body { position:absolute; inset:0; }
+  .marker-pin .pin-body svg { width: 100%; height: 100%; filter: drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+  .marker-pin .pin-label { position: absolute; top: 6px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; font-weight: 700; }
+
+  /* 行进中的位置点 */
+  .walk-dot { width: 16px; height: 16px; border-radius: 50%; background: #3385ff; border: 3px solid #fff; box-shadow: 0 0 0 2px #3385ff, 0 2px 6px rgba(51,133,255,.5); animation: pulse 1.4s ease-out infinite; }
+  .user-dot { width: 18px; height: 18px; border-radius: 50%; background: #0ea5e9; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(14,165,233,.55), 0 4px 12px rgba(14,165,233,.45); }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 2px #3385ff, 0 0 0 0   rgba(51,133,255,.6); }
+    70%  { box-shadow: 0 0 0 2px #3385ff, 0 0 0 14px rgba(51,133,255,0); }
+    100% { box-shadow: 0 0 0 2px #3385ff, 0 0 0 0   rgba(51,133,255,0); }
+  }
+
+  /* 弹出窗 */
+  .leaflet-popup-content-wrapper { border-radius: 6px; }
+  .spot-popup { font-size: 13px; max-width: 240px; }
+  .spot-popup h3 { margin: 0 0 4px; font-size: 15px; color: #1a2533; }
+  .spot-popup .cat { color: #3385ff; font-size: 11px; margin-bottom: 4px; }
+  .spot-popup p { color: #5a6b7e; font-size: 12px; line-height: 1.5; }
+  .loc-popup { font-size: 13px; color: #1a2533; }
+
+  /* 响应式 */
+  @media (max-width: 700px) {
+    .sidebar { width: 280px; }
+    .sidebar-toggle { left: 292px; }
+    .topbar h1 { font-size: 15px; }
+    .topbar select { min-width: 130px; }
+    .topbar button { padding: 6px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>灵山胜境 · 智能导航</h1>
+  <span class="badge">步行导览</span>
+  <select id="destinationSelect"><option value="">📍 选择目标景点</option></select>
+  <button id="locateBtn" type="button">定位</button>
+  <button id="testPointBtn" type="button">测试点位</button>
+  <a href="/digital-human-3d">← 返回数字人</a>
+</div>
+
+<div class="main">
+  <button id="sidebarToggle" class="sidebar-toggle" type="button">‹</button>
+  <aside class="sidebar">
+    <div class="section-head">
+      <h2>所有景点导航</h2>
+      <span>点击任意景点实时导航</span>
+    </div>
+    <div class="route-list" id="routeList">
+      <div class="route-empty">
+        <span class="icon">🧭</span>
+        正在加载景点...
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2>偏好推荐路线</h2>
+      <span>按当前位置组装</span>
+    </div>
+    <div class="interest-bar" id="interestBar">
+      <button class="interest-chip active" type="button" data-interest="">全部</button>
+      <button class="interest-chip" type="button" data-interest="入门">入门精华</button>
+      <button class="interest-chip" type="button" data-interest="亲子">亲子祈福</button>
+      <button class="interest-chip" type="button" data-interest="自然">自然摄影</button>
+      <button class="interest-chip" type="button" data-interest="历史">历史文化</button>
+    </div>
+    <div class="route-list recommend-list" id="recommendList">
+      <div class="route-empty">
+        <span class="icon">🗺️</span>
+        选择定位后可查看推荐路线
+      </div>
+    </div>
+
+    <!-- 导航详情面板 -->
+    <div class="nav-panel" id="navPanel">
+      <div class="nav-header">
+        <div class="row1">
+          <span class="back" id="navBack">‹</span>
+          <span class="name" id="navName"></span>
+        </div>
+        <div class="start-end">
+          <div class="endpoint"><span class="pin" style="color:#a7f3d0">起</span><span id="navStart"></span></div>
+          <div class="endpoint"><span class="pin" style="color:#fecaca">终</span><span id="navEnd"></span></div>
+        </div>
+        <div class="summary">
+          <div><b id="navDistance">—</b>总距离</div>
+          <div><b id="navTime">—</b>步行用时</div>
+          <div><b id="navStops">—</b>途经景点</div>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button id="actionFit">查看全程</button>
+        <button id="actionVoice">🔊 语音导航</button>
+        <button id="actionPlay" class="primary">▶ 模拟导航</button>
+      </div>
+      <div class="nav-steps" id="navSteps"></div>
+    </div>
+  </aside>
+
+  <div id="map"></div>
+</div>
+
+<script src="/digital-human-3d/leaflet/leaflet.js"></script>
+<script>
+  const BOUNDS = [[31.420, 120.096], [31.432, 120.112]];
+  const SCALE_CENTER = [31.4258, 120.1030];
+  const SCALE_FACTOR = 1.45;
+  const TEST_RAW_LOCATION = [31.42472, 120.10372];
+  const STORAGE_LOCATION_KEY = "lingshanGuideCurrentLocation";
+  const STORAGE_ROUTE_KEY = "lingshanGuideActiveRoute";
+  const STORAGE_SOURCE_KEY = "lingshanGuideLocationSource";
+  const STORAGE_TARGET_KEY = "lingshanGuideTargetSpot";
+  const STORAGE_TEST_POINT_KEY = "lingshanGuideTestPoint";
+  const categoryIcons = { "佛像":"🪷", "建筑":"🏛️", "演出":"🎭", "体验":"🤲", "自然":"🌸" };
+
+  const map = L.map("map", {
+    attributionControl: false,
+    maxBounds: BOUNDS,
+    maxBoundsViscosity: 0.8,
+    minZoom: 14,
+    maxZoom: 18,
+    zoomControl: true,
+  }).setView([31.4258, 120.1030], 15);
+
+  L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", {
+    subdomains: ["1","2","3","4"],
+    maxZoom: 18,
+  }).addTo(map);
+
+  const spotPoints = [];
+  const spotMarkers = new Map();
+  let activeRoute = null;
+  let routeHalo = null;
+  let routeLine = null;
+  let routeStartMarker = null;
+  let routeEndMarker = null;
+  let activeTargetId = null;
+  let activePlanId = null;
+  let activeInterest = "";
+  let walkMarker = null;
+  let walkAnim = { rafId: null, playing: false };
+  let navAudio = null;
+  let navGuidanceActive = false;
+  let navLastStepIndex = -1;
+  let navLastAnnounceAt = 0;
+  let navArrivalAnnounced = false;
+  let navStartupPending = false;
+  let navCurrentWaypointIndex = 1;
+  let navLastArrivedWaypointIndex = 0;
+  let locationWatchId = null;
+  const initialQuery = new URLSearchParams(window.location.search);
+  const initialTargetSpotId = initialQuery.get("target_spot_id");
+  let useTestPoint = localStorage.getItem(STORAGE_SOURCE_KEY) === "test";
+  let userMarker = null;
+  let userAccuracy = null;
+  let lastUserLatLng = null;
+  let lastRawUserLatLng = null;
+  let loadingLiveRoute = false;
+  let loadingRecommendations = false;
+  let sidebarCollapsed = false;
+
+  function scalePoint(lat, lng) {
+    return [
+      SCALE_CENTER[0] + (lat - SCALE_CENTER[0]) * SCALE_FACTOR,
+      SCALE_CENTER[1] + (lng - SCALE_CENTER[1]) * SCALE_FACTOR,
+    ];
+  }
+
+  function unscalePoint(lat, lng) {
+    return [
+      SCALE_CENTER[0] + (lat - SCALE_CENTER[0]) / SCALE_FACTOR,
+      SCALE_CENTER[1] + (lng - SCALE_CENTER[1]) / SCALE_FACTOR,
+    ];
+  }
+
+  function haversine(a, b) {
+    const R = 6371000;
+    const p1 = a[0] * Math.PI / 180, p2 = b[0] * Math.PI / 180;
+    const dp = (b[0] - a[0]) * Math.PI / 180;
+    const dl = (b[1] - a[1]) * Math.PI / 180;
+    const x = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  function formatDistance(m) {
+    if (m < 1000) return `${m} 米`;
+    return `${(m / 1000).toFixed(1)} 公里`;
+  }
+
+  function makePin(label, color) {
+    const html = `
+      <div class="marker-pin">
+        <div class="pin-body">
+          <svg viewBox="0 0 30 38" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 23 15 23s15-12 15-23C30 6.7 23.3 0 15 0z" fill="${color}"/>
+            <circle cx="15" cy="15" r="9" fill="#fff" opacity="0.25"/>
+          </svg>
+        </div>
+        <div class="pin-label">${label}</div>
+      </div>`;
+    return L.divIcon({ className: "", html, iconSize: [30, 38], iconAnchor: [15, 38] });
+  }
+
+  function persistLocation(rawLatlng, source) {
+    localStorage.setItem(STORAGE_LOCATION_KEY, JSON.stringify({
+      latitude: rawLatlng[0],
+      longitude: rawLatlng[1],
+      source,
+      updatedAt: Date.now(),
+    }));
+    localStorage.setItem(STORAGE_SOURCE_KEY, source);
+  }
+
+  function persistTestPoint(rawLatlng) {
+    localStorage.setItem(STORAGE_TEST_POINT_KEY, JSON.stringify({
+      latitude: rawLatlng[0],
+      longitude: rawLatlng[1],
+    }));
+  }
+
+  function getSavedTestPoint() {
+    try {
+      const raw = localStorage.getItem(STORAGE_TEST_POINT_KEY);
+      if (!raw) return TEST_RAW_LOCATION;
+      const point = JSON.parse(raw);
+      return [Number(point.latitude), Number(point.longitude)];
+    } catch (_) {
+      return TEST_RAW_LOCATION;
+    }
+  }
+
+  function persistTarget(spot) {
+    if (!spot) {
+      localStorage.removeItem(STORAGE_TARGET_KEY);
+      return;
+    }
+    localStorage.setItem(STORAGE_TARGET_KEY, JSON.stringify({
+      id: spot.id,
+      name: spot.name,
+    }));
+  }
+
+  function setLocateState(text, locating = false) {
+    const btn = document.getElementById("locateBtn");
+    btn.textContent = text;
+    btn.classList.toggle("locating", locating);
+    btn.disabled = locating;
+  }
+
+  function setTestPointState(active) {
+    document.getElementById("testPointBtn").textContent = active ? "关闭测试点" : "测试点位";
+  }
+
+  function findSpotById(id) {
+    return spotPoints.find((spot) => String(spot.id) === String(id)) || null;
+  }
+
+  function findNearestSpot(latlng) {
+    if (!spotPoints.length) return null;
+    let best = null;
+    let bestDistance = Infinity;
+    for (const spot of spotPoints) {
+      const distance = haversine(latlng, [spot.lat, spot.lng]);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { ...spot, distance };
+      }
+    }
+    return best;
+  }
+
+  function nearestRouteProgress(coords, latlng) {
+    let best = { distance: Infinity, segmentIndex: 0, ratio: 0 };
+    for (let i = 0; i < coords.length - 1; i++) {
+      const a = coords[i];
+      const b = coords[i + 1];
+      const ax = a[1], ay = a[0];
+      const bx = b[1], by = b[0];
+      const px = latlng[1], py = latlng[0];
+      const abx = bx - ax, aby = by - ay;
+      const ab2 = abx * abx + aby * aby || 1e-9;
+      const t = Math.max(0, Math.min(1, ((px - ax) * abx + (py - ay) * aby) / ab2));
+      const proj = [ay + aby * t, ax + abx * t];
+      const distance = haversine(latlng, proj);
+      if (distance < best.distance) best = { distance, segmentIndex: i, ratio: t };
+    }
+    return best;
+  }
+
+  function distanceRemainingAlongRoute(coords, progress) {
+    let total = 0;
+    const i = progress.segmentIndex;
+    if (i < coords.length - 1) {
+      const a = coords[i];
+      const b = coords[i + 1];
+      const current = [
+        a[0] + (b[0] - a[0]) * progress.ratio,
+        a[1] + (b[1] - a[1]) * progress.ratio,
+      ];
+      total += haversine(current, b);
+    }
+    for (let idx = i + 1; idx < coords.length - 1; idx++) total += haversine(coords[idx], coords[idx + 1]);
+    return total;
+  }
+
+  function ensureRouteLayers() {
+    if (!routeHalo) routeHalo = L.polyline([], { color: "#fff", weight: 9, opacity: 0.85, lineCap: "round", lineJoin: "round" }).addTo(map);
+    if (!routeLine) routeLine = L.polyline([], { color: "#0ea5e9", weight: 5, opacity: 1, lineCap: "round", lineJoin: "round" }).addTo(map);
+    if (!routeStartMarker) routeStartMarker = L.marker([0, 0], { icon: makePin("起", "#10b563"), opacity: 0 }).addTo(map);
+    if (!routeEndMarker) routeEndMarker = L.marker([0, 0], { icon: makePin("终", "#ef4444"), opacity: 0 }).addTo(map);
+  }
+
+  function clearRouteLayers() {
+    if (routeHalo) routeHalo.setLatLngs([]);
+    if (routeLine) routeLine.setLatLngs([]);
+    if (routeStartMarker) routeStartMarker.setOpacity(0);
+    if (routeEndMarker) routeEndMarker.setOpacity(0);
+  }
+
+  function applyRouteFeature(feature, shouldFly = true) {
+    const coords = feature.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    feature.coords = coords;
+    activeRoute = feature;
+    ensureRouteLayers();
+    routeHalo.setLatLngs(coords);
+    routeLine.setLatLngs(coords);
+    routeLine.setStyle({ color: feature.properties.color || "#0ea5e9" });
+    routeStartMarker.setLatLng(coords[0]).setOpacity(1);
+    routeEndMarker.setLatLng(coords[coords.length - 1]).setOpacity(1);
+    routeLine.bringToFront();
+    renderNavPanel(feature);
+    if (shouldFly) map.fitBounds(L.latLngBounds(coords), { padding: [60, 60], maxZoom: 17 });
+    if (navGuidanceActive) {
+      navLastStepIndex = -1;
+      navArrivalAnnounced = false;
+      updateLiveGuidance();
+    }
+  }
+
+  function buildStepEl({ cls, marker, name, instruction, seg, latlng }) {
+    const div = document.createElement("div");
+    div.className = `step ${cls || ""}`;
+    const segHtml = seg
+      ? `<div class="seg">🚶 步行 <b>${formatDistance(seg.distance)}</b><span>·</span>约 <b>${seg.duration}</b> 分钟</div>`
+      : "";
+    div.innerHTML = `
+      <div class="left"><div class="marker">${marker}</div><div class="line"></div></div>
+      <div class="body">
+        <div class="name">${name}</div>
+        <div class="instruction">${instruction}</div>
+        ${segHtml}
+      </div>`;
+    if (latlng) {
+      div.addEventListener("click", () => {
+        document.querySelectorAll(".step").forEach((s) => s.classList.remove("active"));
+        div.classList.add("active");
+        map.flyTo(latlng, 17, { duration: 0.6 });
+      });
+    }
+    return div;
+  }
+
+  function renderNavPanel(route) {
+    const p = route.properties;
+    document.getElementById("navName").textContent = p.name;
+    document.getElementById("navStart").textContent = p.start_name || "当前位置";
+    document.getElementById("navEnd").textContent = p.end_name || "";
+    document.getElementById("navDistance").textContent = `${(p.total_distance_m / 1000).toFixed(2)} 公里`;
+    document.getElementById("navTime").textContent = `${p.walking_min} 分钟`;
+    document.getElementById("navStops").textContent = `${p.stops} 个`;
+
+    const stepsBox = document.getElementById("navSteps");
+    stepsBox.innerHTML = "";
+    const wps = p.waypoints || [];
+    const steps = p.steps || [];
+
+    if (wps.length) {
+      stepsBox.appendChild(buildStepEl({
+        cls: "start",
+        marker: "起",
+        name: wps[0].name,
+        instruction: useTestPoint ? "测试点位，可拖动后自动重算路线" : "当前位置",
+        seg: null,
+        latlng: [wps[0].lat, wps[0].lng],
+      }));
+    }
+
+    steps.forEach((step, index) => {
+      const isLast = index === steps.length - 1;
+      const wp = wps[index + 1];
+      const nextName = isLast ? "到达终点" : `下一小景点：${steps[index + 1].to_name}`;
+      stepsBox.appendChild(buildStepEl({
+        cls: isLast ? "end" : "",
+        marker: isLast ? "终" : String(index + 1),
+        name: step.to_name,
+        instruction: `${step.instruction}。${nextName}`,
+        seg: { distance: step.distance_m, duration: step.duration_min },
+        latlng: wp ? [wp.lat, wp.lng] : null,
+      }));
+    });
+
+    document.getElementById("routeList").style.display = "none";
+    document.getElementById("navPanel").classList.add("active");
+  }
+
+  function deactivateRoute() {
+    stopWalk();
+    stopGuidance();
+    activeRoute = null;
+    activeTargetId = null;
+    activePlanId = null;
+    localStorage.removeItem(STORAGE_ROUTE_KEY);
+    persistTarget(null);
+    document.getElementById("destinationSelect").value = "";
+    document.querySelectorAll(".route-card").forEach((card) => card.classList.remove("active"));
+    document.getElementById("navPanel").classList.remove("active");
+    document.getElementById("routeList").style.display = "";
+    clearRouteLayers();
+  }
+
+  async function speakGuidance(text) {
+    const clean = (text || "").trim();
+    if (!clean) return;
+    try {
+      if (navAudio) {
+        navAudio.pause();
+        navAudio.removeAttribute("src");
+        navAudio.load();
+        navAudio = null;
+      }
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean }),
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const binStr = atob(payload.audio || "");
+      const bytes = new Uint8Array(binStr.length);
+      for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+      const blob = new Blob([bytes], { type: payload.audio_mime || "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+      navAudio = new Audio(url);
+      await new Promise((resolve) => {
+        navAudio.addEventListener("ended", () => {
+          URL.revokeObjectURL(url);
+          if (navAudio && navAudio.src === url) navAudio = null;
+          resolve();
+        }, { once: true });
+        navAudio.addEventListener("error", () => {
+          URL.revokeObjectURL(url);
+          if (navAudio && navAudio.src === url) navAudio = null;
+          resolve();
+        }, { once: true });
+        navAudio.play().catch(() => resolve());
+      });
+    } catch (err) {
+      console.warn("导航播报失败", err);
+    }
+  }
+
+  function stopGuidance() {
+    navGuidanceActive = false;
+    navLastStepIndex = -1;
+    navLastAnnounceAt = 0;
+    navArrivalAnnounced = false;
+    navStartupPending = false;
+    navCurrentWaypointIndex = 1;
+    navLastArrivedWaypointIndex = 0;
+    document.getElementById("actionVoice").textContent = "🔊 语音导航";
+    if (locationWatchId != null) {
+      navigator.geolocation.clearWatch(locationWatchId);
+      locationWatchId = null;
+    }
+    if (navAudio) {
+      navAudio.pause();
+      navAudio.removeAttribute("src");
+      navAudio.load();
+      navAudio = null;
+    }
+  }
+
+  function updateLiveGuidanceAt(latlng) {
+    if (!navGuidanceActive || !activeRoute || !latlng) return;
+    if (navStartupPending) return;
+    const steps = activeRoute.properties.steps || [];
+    const waypoints = activeRoute.properties.waypoints || [];
+    if (!steps.length) return;
+    if (waypoints.length < 2) return;
+
+    const now = Date.now();
+    const progress = nearestRouteProgress(activeRoute.coords, latlng);
+    const remain = distanceRemainingAlongRoute(activeRoute.coords, progress);
+
+    navCurrentWaypointIndex = Math.max(1, Math.min(navCurrentWaypointIndex, waypoints.length - 1));
+    const currentWaypoint = waypoints[navCurrentWaypointIndex];
+    const currentDistance = Math.round(haversine(latlng, [currentWaypoint.lat, currentWaypoint.lng]));
+    const step = steps[Math.max(0, navCurrentWaypointIndex - 1)];
+    const nextWaypoint = waypoints[navCurrentWaypointIndex + 1] || null;
+
+    if (currentDistance <= 40) {
+      if (navLastArrivedWaypointIndex !== navCurrentWaypointIndex && now - navLastAnnounceAt > 1500) {
+        navLastArrivedWaypointIndex = navCurrentWaypointIndex;
+        navLastAnnounceAt = now;
+        if (nextWaypoint) {
+          const nextStep = steps[navCurrentWaypointIndex];
+          const nextDistance = nextStep ? nextStep.distance_m : Math.round(haversine([currentWaypoint.lat, currentWaypoint.lng], [nextWaypoint.lat, nextWaypoint.lng]));
+          const nextDirection = nextStep ? nextStep.direction : "继续前往";
+          speakGuidance(`你已到达${currentWaypoint.name}附近。下一站前往${nextWaypoint.name}，请${nextDirection}步行约${nextDistance}米，全程还剩${formatDistance(Math.round(remain))}。`);
+          navCurrentWaypointIndex += 1;
+        } else {
+          navArrivalAnnounced = true;
+          speakGuidance(`你已到达${activeRoute.properties.end_name}。本次导航结束。`);
+        }
+      }
+      return;
+    }
+
+    if (navLastStepIndex !== navCurrentWaypointIndex && now - navLastAnnounceAt > 2500) {
+      navLastStepIndex = navCurrentWaypointIndex;
+      navLastAnnounceAt = now;
+      const nextHint = nextWaypoint ? `到达${currentWaypoint.name}后，再前往${nextWaypoint.name}。` : "这就是最后一段。";
+      speakGuidance(`请先前往${currentWaypoint.name}，从你当前位置${step.direction}步行约${currentDistance}米。${nextHint} 全程还剩${formatDistance(Math.round(remain))}。`);
+      return;
+    }
+
+    if (!navArrivalAnnounced && remain < 45 && !nextWaypoint) {
+      navArrivalAnnounced = true;
+      navLastAnnounceAt = now;
+      speakGuidance(`即将到达${activeRoute.properties.end_name}，当前还剩约${formatDistance(currentDistance)}。`);
+    }
+  }
+
+  function updateLiveGuidance() {
+    updateLiveGuidanceAt(lastUserLatLng);
+  }
+
+  function updateRouteSelectionUi() {
+    document.querySelectorAll(".route-card").forEach((card) => {
+      const isSpot = card.dataset.spotId && String(card.dataset.spotId) === String(activeTargetId);
+      const isPlan = card.dataset.planId && String(card.dataset.planId) === String(activePlanId);
+      card.classList.toggle("active", Boolean(isSpot || isPlan));
+    });
+    document.getElementById("destinationSelect").value = activeTargetId ? String(activeTargetId) : "";
+  }
+
+  async function requestLiveRoute(targetId, shouldFly = true) {
+    if (!lastRawUserLatLng || loadingLiveRoute) return;
+    const target = findSpotById(targetId);
+    if (!target) return;
+    loadingLiveRoute = true;
+    try {
+      const response = await fetch("/api/map/route/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: lastRawUserLatLng[0],
+          longitude: lastRawUserLatLng[1],
+          target_spot_id: target.id,
+        }),
+      });
+      if (!response.ok) throw new Error("实时路线生成失败");
+      const feature = await response.json();
+      activePlanId = null;
+      activeRoute = feature;
+      activeTargetId = target.id;
+      navCurrentWaypointIndex = 1;
+      navLastArrivedWaypointIndex = 0;
+      navLastStepIndex = -1;
+      navArrivalAnnounced = false;
+      localStorage.setItem(STORAGE_ROUTE_KEY, String(feature.properties.id));
+      persistTarget(target);
+      updateRouteSelectionUi();
+      applyRouteFeature(feature, shouldFly);
+      activateRoute();
+    } catch (err) {
+      console.error(err);
+      alert("实时路线生成失败，请稍后重试。");
+    } finally {
+      loadingLiveRoute = false;
+    }
+  }
+
+  function renderSpotList() {
+    const list = document.getElementById("routeList");
+    const select = document.getElementById("destinationSelect");
+    list.innerHTML = "";
+    select.innerHTML = '<option value="">📍 选择目标景点</option>';
+
+    if (!spotPoints.length) {
+      list.innerHTML = '<div class="route-empty"><span class="icon">📭</span>暂无景点数据</div>';
+      return;
+    }
+
+    spotPoints.forEach((spot) => {
+      const nearest = lastUserLatLng ? haversine(lastUserLatLng, [spot.lat, spot.lng]) : null;
+      const card = document.createElement("div");
+      card.className = "route-card";
+      card.dataset.spotId = spot.id;
+      card.innerHTML = `
+        <div class="title"><span class="dot" style="background:#0ea5e9"></span>${spot.name}</div>
+        <div class="meta">
+          <span>${spot.category || "景点"}</span>
+          <span>${nearest == null ? "等待定位" : `直线约 ${formatDistance(Math.round(nearest))}`}</span>
+          <span class="difficulty">点此实时导航</span>
+        </div>
+      `;
+      card.addEventListener("click", () => requestLiveRoute(spot.id));
+      list.appendChild(card);
+
+      const opt = document.createElement("option");
+      opt.value = spot.id;
+      opt.textContent = spot.name;
+      select.appendChild(opt);
+    });
+
+    updateRouteSelectionUi();
+  }
+
+  async function loadRecommendations() {
+    if (!lastRawUserLatLng || loadingRecommendations) return;
+    loadingRecommendations = true;
+    const box = document.getElementById("recommendList");
+    box.innerHTML = '<div class="route-empty"><span class="icon">🗺️</span>正在组装推荐路线...</div>';
+    try {
+      const params = new URLSearchParams({
+        latitude: String(lastRawUserLatLng[0]),
+        longitude: String(lastRawUserLatLng[1]),
+      });
+      if (activeInterest) params.set("interest", activeInterest);
+      const response = await fetch(`/api/map/recommendations?${params.toString()}`);
+      if (!response.ok) throw new Error("推荐路线加载失败");
+      const geo = await response.json();
+      const features = geo.features || [];
+      if (!features.length) {
+        box.innerHTML = '<div class="route-empty"><span class="icon">📭</span>当前位置暂无可组装的推荐路线</div>';
+        return;
+      }
+      box.innerHTML = "";
+      features.forEach((feature) => {
+        const p = feature.properties;
+        const card = document.createElement("div");
+        card.className = "route-card recommend";
+        card.dataset.planId = p.plan_id || p.id;
+        card.innerHTML = `
+          <div class="title"><span class="dot" style="background:${p.color || "#f76b1c"}"></span>${p.name}</div>
+          <div class="meta">
+            <span>${p.difficulty || "推荐"}</span>
+            <span>约 ${(p.total_distance_m / 1000).toFixed(1)} 公里</span>
+            <span>${p.walking_min} 分钟</span>
+          </div>
+          <div class="desc">从当前位置自动串联相关景点，适合${p.difficulty || "当前"}偏好游览。</div>
+        `;
+        card.addEventListener("click", () => {
+          activeTargetId = null;
+          activePlanId = p.plan_id || p.id;
+          persistTarget(null);
+          localStorage.setItem(STORAGE_ROUTE_KEY, String(p.id));
+          updateRouteSelectionUi();
+          applyRouteFeature(feature, true);
+        });
+        box.appendChild(card);
+      });
+      updateRouteSelectionUi();
+    } catch (err) {
+      console.error(err);
+      box.innerHTML = '<div class="route-empty"><span class="icon">⚠️</span>推荐路线加载失败</div>';
+    } finally {
+      loadingRecommendations = false;
+    }
+  }
+
+  function setSidebarCollapsed(next) {
+    sidebarCollapsed = next;
+    const sidebar = document.querySelector(".sidebar");
+    const toggle = document.getElementById("sidebarToggle");
+    sidebar.classList.toggle("collapsed", next);
+    toggle.classList.toggle("collapsed", next);
+    toggle.textContent = next ? "›" : "‹";
+  }
+
+  function refreshSpotDistances() {
+    if (!spotPoints.length) return;
+    renderSpotList();
+  }
+
+  function showUserLocation(rawLatlng, accuracy, shouldFly, options = {}) {
+    const { recomputeRoute = false } = options;
+    lastRawUserLatLng = rawLatlng;
+    const latlng = scalePoint(rawLatlng[0], rawLatlng[1]);
+    lastUserLatLng = latlng;
+    persistLocation(rawLatlng, useTestPoint ? "test" : "gps");
+    if (useTestPoint) persistTestPoint(rawLatlng);
+
+    const nearest = findNearestSpot(latlng);
+    const popupText = nearest
+      ? `<div class="loc-popup"><b>${useTestPoint ? "测试点位" : "当前位置"}</b><br>靠近 ${nearest.name} · 约 ${Math.round(nearest.distance)} 米<br>${useTestPoint ? "可直接拖动这个点位" : ""}</div>`
+      : `<div class="loc-popup"><b>${useTestPoint ? "测试点位" : "当前位置"}</b></div>`;
+
+    if (!userMarker) {
+      userMarker = L.marker(latlng, {
+        draggable: useTestPoint,
+        icon: L.divIcon({
+          className: "",
+          html: '<div class="user-dot"></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        }),
+        zIndexOffset: 1200,
+      }).addTo(map).bindPopup(popupText);
+      userMarker.on("dragend", () => {
+        if (!useTestPoint) return;
+        const p = userMarker.getLatLng();
+        const raw = unscalePoint(p.lat, p.lng);
+        showUserLocation(raw, 8, false, { recomputeRoute: false });
+        if (activeTargetId) requestLiveRoute(activeTargetId, false);
+      });
+    } else {
+      userMarker.setLatLng(latlng);
+      userMarker.bindPopup(popupText);
+      if (userMarker.dragging) {
+        if (useTestPoint) userMarker.dragging.enable();
+        else userMarker.dragging.disable();
+      }
+    }
+
+    if (!userAccuracy) {
+      userAccuracy = L.circle(latlng, {
+        radius: (accuracy || 30) * SCALE_FACTOR,
+        color: "#0ea5e9",
+        weight: 1,
+        fillColor: "#0ea5e9",
+        fillOpacity: 0.12,
+      }).addTo(map);
+    } else {
+      userAccuracy.setLatLng(latlng);
+      userAccuracy.setRadius((accuracy || 30) * SCALE_FACTOR);
+    }
+
+    if (shouldFly) map.flyTo(latlng, 17, { duration: 0.6 });
+    refreshSpotDistances();
+    loadRecommendations();
+    if (recomputeRoute && activeTargetId) requestLiveRoute(activeTargetId, false);
+    else if (recomputeRoute && activePlanId) loadRecommendations();
+    else updateLiveGuidance();
+  }
+
+  function locateUser(shouldFly = true) {
+    useTestPoint = false;
+    setTestPointState(false);
+    if (!navigator.geolocation) {
+      setLocateState("无法定位");
+      alert("当前浏览器不支持定位功能");
+      return;
+    }
+    setLocateState("定位中...", true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        showUserLocation([pos.coords.latitude, pos.coords.longitude], pos.coords.accuracy, shouldFly, { recomputeRoute: true });
+        setLocateState("我的位置");
+      },
+      (err) => {
+        console.warn("定位失败", err);
+        setLocateState("定位失败");
+        alert("定位失败，请检查浏览器定位权限。");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
+    );
+  }
+
+  function startWatchingLocation() {
+    if (useTestPoint || !navigator.geolocation || locationWatchId != null) return;
+    locationWatchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        showUserLocation([pos.coords.latitude, pos.coords.longitude], pos.coords.accuracy, false, { recomputeRoute: true });
+      },
+      (err) => console.warn("持续定位失败", err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+  }
+
+  function toggleTestPoint() {
+    useTestPoint = !useTestPoint;
+    setTestPointState(useTestPoint);
+    if (useTestPoint) {
+      if (locationWatchId != null) {
+        navigator.geolocation.clearWatch(locationWatchId);
+        locationWatchId = null;
+      }
+      showUserLocation(getSavedTestPoint(), 8, true, { recomputeRoute: true });
+      setLocateState("测试点位");
+      return;
+    }
+    localStorage.removeItem(STORAGE_SOURCE_KEY);
+    locateUser(true);
+  }
+
+  function bootstrapTargetNavigation() {
+    if (!initialTargetSpotId) return false;
+    if (!lastRawUserLatLng) {
+      useTestPoint = true;
+      setTestPointState(true);
+      showUserLocation(getSavedTestPoint(), 8, false, { recomputeRoute: false });
+      setLocateState("测试点位");
+    }
+    return true;
+  }
+
+  function playWalk() {
+    if (!activeRoute) return;
+    stopWalk();
+    walkAnim.playing = true;
+    document.getElementById("actionPlay").classList.add("playing");
+    document.getElementById("actionPlay").textContent = "⏹ 停止导航";
+
+    const routeCoords = activeRoute.coords;
+    const progress = lastUserLatLng ? nearestRouteProgress(routeCoords, lastUserLatLng) : { segmentIndex: 0, ratio: 0 };
+    const startSegment = Math.min(progress.segmentIndex, routeCoords.length - 2);
+    const segA = routeCoords[startSegment];
+    const segB = routeCoords[startSegment + 1];
+    const startPoint = [
+      segA[0] + (segB[0] - segA[0]) * progress.ratio,
+      segA[1] + (segB[1] - segA[1]) * progress.ratio,
+    ];
+    const coords = [startPoint, ...routeCoords.slice(startSegment + 1)];
+
+    const segLen = [];
+    let total = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const d = haversine(coords[i], coords[i + 1]);
+      segLen.push(d);
+      total += d;
+    }
+
+    walkMarker = L.marker(startPoint, {
+      icon: L.divIcon({ className: "", html: '<div class="walk-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
+      zIndexOffset: 1000,
+    }).addTo(map);
+
+    const durationMs = Math.max(8000, Math.min(30000, activeRoute.properties.walking_min * 600));
+    const startedAt = performance.now();
+
+    function tick(now) {
+      if (!walkAnim.playing) return;
+      const t = Math.min(1, (now - startedAt) / durationMs);
+      const targetDist = t * total;
+      let acc = 0;
+      let idx = 0;
+      while (idx < segLen.length && acc + segLen[idx] < targetDist) { acc += segLen[idx]; idx += 1; }
+      if (idx >= segLen.length) {
+        walkMarker.setLatLng(coords[coords.length - 1]);
+        stopWalk();
+        return;
+      }
+      const ratio = (targetDist - acc) / segLen[idx];
+      const a = coords[idx];
+      const b = coords[idx + 1];
+      const lat = a[0] + (b[0] - a[0]) * ratio;
+      const lng = a[1] + (b[1] - a[1]) * ratio;
+      const raw = unscalePoint(lat, lng);
+      if (walkMarker) walkMarker.setLatLng([lat, lng]);
+      showUserLocation(raw, 8, false, { recomputeRoute: false });
+      updateLiveGuidanceAt([lat, lng]);
+      walkAnim.rafId = requestAnimationFrame(tick);
+    }
+    walkAnim.rafId = requestAnimationFrame(tick);
+  }
+
+  function stopWalk() {
+    walkAnim.playing = false;
+    if (walkAnim.rafId) {
+      cancelAnimationFrame(walkAnim.rafId);
+      walkAnim.rafId = null;
+    }
+    if (walkMarker) {
+      map.removeLayer(walkMarker);
+      walkMarker = null;
+    }
+    const btn = document.getElementById("actionPlay");
+    btn.classList.remove("playing");
+    btn.textContent = "▶ 模拟导航";
+  }
+
+  async function loadSpots() {
+    try {
+      const response = await fetch("/api/map/spots");
+      const geo = await response.json();
+      for (const f of geo.features || []) {
+        const [lng, lat] = f.geometry.coordinates;
+        const p = f.properties;
+        const icon = categoryIcons[p.category] || "📍";
+        const spot = { id: p.id, name: p.name, category: p.category, description: p.description, lat, lng };
+        spotPoints.push(spot);
+        const marker = L.marker([lat, lng], {
+          icon: L.divIcon({
+            className: "",
+            html: `<div class="marker-icon">${icon}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+          }),
+        }).addTo(map).bindPopup(
+          `<div class="spot-popup">
+            <h3>${icon} ${p.name}</h3>
+            <div class="cat">${p.category || ""}</div>
+            <p>${p.description || ""}</p>
+          </div>`
+        );
+        marker.on("click", () => requestLiveRoute(spot.id));
+        spotMarkers.set(spot.id, marker);
+      }
+      renderSpotList();
+
+      if (initialTargetSpotId && lastRawUserLatLng) {
+        localStorage.removeItem(STORAGE_ROUTE_KEY);
+        requestLiveRoute(initialTargetSpotId, true);
+        return;
+      }
+
+      const savedTargetRaw = localStorage.getItem(STORAGE_TARGET_KEY);
+      if (savedTargetRaw) {
+        try {
+          const savedTarget = JSON.parse(savedTargetRaw);
+          if (savedTarget?.id && lastRawUserLatLng) requestLiveRoute(savedTarget.id, false);
+        } catch (_) {}
+      }
+    } catch (err) {
+      console.error("加载景点失败", err);
+      document.getElementById("routeList").innerHTML = '<div class="route-empty"><span class="icon">⚠️</span>景点加载失败，请刷新重试</div>';
+    }
+  }
+
+  document.getElementById("destinationSelect").addEventListener("change", function () {
+    const targetId = this.value;
+    if (targetId) requestLiveRoute(targetId);
+    else deactivateRoute();
+  });
+  document.getElementById("sidebarToggle").addEventListener("click", () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  });
+  document.getElementById("interestBar").addEventListener("click", (event) => {
+    const chip = event.target.closest(".interest-chip");
+    if (!chip) return;
+    activeInterest = chip.dataset.interest || "";
+    document.querySelectorAll(".interest-chip").forEach((el) => {
+      el.classList.toggle("active", el === chip);
+    });
+    loadRecommendations();
+  });
+  document.getElementById("navBack").addEventListener("click", deactivateRoute);
+  document.getElementById("actionFit").addEventListener("click", () => {
+    if (activeRoute) map.fitBounds(L.latLngBounds(activeRoute.coords), { padding: [60, 60], maxZoom: 17 });
+  });
+  document.getElementById("actionPlay").addEventListener("click", () => {
+    walkAnim.playing ? stopWalk() : playWalk();
+  });
+  document.getElementById("actionVoice").addEventListener("click", () => {
+    if (!activeRoute) {
+      alert("请先选择目标景点，再开启语音导航。");
+      return;
+    }
+    if (navGuidanceActive) {
+      stopGuidance();
+      return;
+    }
+    navGuidanceActive = true;
+    navLastStepIndex = -1;
+    navArrivalAnnounced = false;
+    navStartupPending = true;
+    document.getElementById("actionVoice").textContent = "🔇 关闭语音";
+    if (!useTestPoint) startWatchingLocation();
+    speakGuidance("已开启实时语音导航，我会根据你当前的位置持续重算并播报下一段路线。").finally(() => {
+      navStartupPending = false;
+      updateLiveGuidance();
+    });
+  });
+  document.getElementById("locateBtn").addEventListener("click", () => {
+    if (lastUserLatLng) map.flyTo(lastUserLatLng, 17, { duration: 0.6 });
+    else locateUser(true);
+  });
+  document.getElementById("testPointBtn").addEventListener("click", toggleTestPoint);
+
+  setTestPointState(useTestPoint);
+  setSidebarCollapsed(false);
+  const bootstrappedTarget = bootstrapTargetNavigation();
+  if (useTestPoint) {
+    showUserLocation(getSavedTestPoint(), 8, false, { recomputeRoute: false });
+    setLocateState("测试点位");
+  } else if (!bootstrappedTarget) {
+    locateUser(false);
+  }
+  loadSpots();
+</script>
+</body>
+</html>
