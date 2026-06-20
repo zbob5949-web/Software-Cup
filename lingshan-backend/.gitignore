@@ -1,0 +1,11 @@
+﻿.env
+.jwt_secret
+__pycache__/
+*.py[cod]
+audio_output/
+.pytest_cache/
+.idea/
+.claude/
+*.db
+*.sqlite
+*.log
