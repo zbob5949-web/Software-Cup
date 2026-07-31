@@ -1,2 +1,0 @@
-# Software_Cup
- 
