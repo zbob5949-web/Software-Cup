@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>调试</title></head>
+<body style="background:#101715;color:#eaf4ef;font-family:sans-serif;padding:30px">
+<h2>Token 调试</h2>
+<input id="t" placeholder="贴 JWT" style="width:500px;padding:8px;margin:10px 0;display:block">
+<button onclick="test()" style="padding:10px 20px">测试连接</button>
+<pre id="out" style="margin-top:20px;padding:16px;background:#111;border-radius:8px"></pre>
+<script>
+async function test(){
+  const out=document.getElementById('out');
+  const token=document.getElementById('t').value.trim();
+  if(!token){out.textContent='请先粘贴 token';return}
+
+  async function call(url){
+    const r=await fetch(url,{headers:{'Authorization':'Bearer '+token}});
+    const j=await r.json();
+    return {status:r.status, ok:r.ok, body:j};
+  }
+
+  out.textContent='测试中...';
+  const r1=await call('/api/admin/knowledge/config');
+  const r2=await call('/api/admin/digital-humans');
+  out.textContent=JSON.stringify({config:r1, humans:r2},null,2);
+}
+</script>
+</body>
+</html>

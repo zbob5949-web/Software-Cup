@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>灵山导览管理后台</title>
+<style>
+:root{font-family:"Microsoft YaHei",Arial,sans-serif;color:#eaf4ef;background:#101715;--panel:#18221f;--line:#30413b;--muted:#9bb0a8;--accent:#68c8a9;--danger:#e27e91}
+*{box-sizing:border-box}body{margin:0;background:#101715}
+button,input,textarea,select{font:inherit;padding:9px 13px;border-radius:7px}
+button{border:1px solid var(--line);background:#22312c;color:var(--accent);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:#102019;border-color:var(--accent);font-weight:700}
+button.danger{color:#ff9caf}
+input,textarea,select{width:100%;border:1px solid var(--line);background:#111b18;color:#eaf4ef;padding:10px}
+textarea{min-height:120px;resize:vertical}
+.shell{max-width:1440px;margin:auto;padding:28px}
+.header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:22px}
+.eyebrow{color:var(--accent);font-size:13px}
+.header h1{margin:6px 0;font-size:30px}
+.header p{color:var(--muted);margin:0;line-height:1.6}
+.auth{display:flex;gap:8px;align-items:center;min-width:min(500px,100%)}
+.auth input{flex:1;height:38px}
+.tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tab{border:0;border-radius:7px 7px 0 0;background:transparent;color:var(--muted);padding:10px 18px;font-size:15px;cursor:pointer}
+.tab.active{background:#22312c;color:var(--accent)}
+.view{display:none}
+.view.active{display:block}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+.panel h3{margin:0 0 8px;font-size:18px}
+.muted{color:var(--muted)}
+.status{padding:10px 12px;border:1px solid var(--line);border-radius:7px;color:var(--muted);margin:12px 0;font-size:13px}
+.status.ok{color:var(--accent)}
+.status .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:var(--muted)}
+.status.ok .dot{background:var(--accent)}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.toolbar .input{max-width:280px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font-size:12px;color:var(--muted);font-weight:500}
+td{font-size:14px}
+.doc-row{cursor:pointer}
+.doc-row:hover{background:#1e2a26}
+.doc-row.sel{background:#1a3028;outline:1px solid var(--accent);outline-offset:-1px}
+.doc-name{font-weight:600}
+.doc-name small{font-weight:400;color:var(--muted);font-size:12px;display:block;margin-top:2px;word-break:break-all}
+.tag{padding:2px 8px;border-radius:4px;font-size:12px;border:1px solid var(--line)}
+.tag.ok{color:var(--accent);border-color:#2d5c44}
+.edit-panel{background:#111b18;padding:16px;border-radius:8px;margin-top:12px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:grid;gap:6px}
+.field.full{grid-column:1/-1}
+.field label{font-size:13px;color:var(--muted)}
+.human-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.human-card{border:2px solid var(--line);border-radius:10px;padding:16px;background:#141e1b;cursor:pointer;transition:all .15s;position:relative}
+.human-card:hover{border-color:#3d5a4a}
+.human-card.sel,.human-card.active{border-color:var(--accent)}
+.human-card.sel{box-shadow:0 0 0 2px #68c8a944}
+.human-card .badge{position:absolute;top:12px;right:12px;background:var(--accent);color:#102019;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700}
+.human-card h3{margin:0 0 6px;font-size:17px}
+.human-card .meta{font-size:12px;color:var(--muted);margin-bottom:8px}
+.human-card p{font-size:13px;color:var(--muted);line-height:1.5;margin:0}
+.human-card.ghost{border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:120px}
+.empty{padding:36px;text-align:center;color:var(--muted)}
+.toast{position:fixed;top:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:8px;font-size:14px;max-width:420px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.toast.ok{background:#1a3a2a;border:1px solid var(--accent);color:var(--accent)}
+.toast.err{background:#3a1a22;border:1px solid var(--danger);color:var(--danger)}
+@media(max-width:900px){.header,.auth{flex-direction:column;align-items:stretch}.human-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:580px){.shell{padding:16px}.form-grid{grid-template-columns:1fr}.human-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header class="header">
+  <div>
+    <div class="eyebrow">LINGSHAN GUIDE / ADMIN</div>
+    <h1>灵山导览管理后台</h1>
+    <p>维护景区知识库 · 配置数字人形象与声音</p>
+  </div>
+  <div class="auth">
+    <input id="token" placeholder="粘贴管理员 JWT">
+    <button id="cn" class="primary">连接后台</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-view="knowledge">知识库管理</button>
+  <button class="tab" data-view="human">数字人配置</button>
+</nav>
+
+<section id="knowledge" class="view active">
+  <div class="panel">
+    <h3>Dify 知识库文档</h3>
+    <div id="difyStatus" class="status"><span class="dot"></span> 尚未连接</div>
+    <div class="toolbar">
+      <input class="input" id="docSearch" placeholder="搜索文档名...">
+      <button id="refreshDocs">刷新</button>
+    </div>
+    <table>
+      <thead><tr><th style="width:45%">文档名称</th><th>状态</th><th style="width:18%">时间</th><th style="width:15%">操作</th></tr></thead>
+      <tbody id="docRows"><tr><td class="empty" colspan="4">请先连接</td></tr></tbody>
+    </table>
+    <div id="docEdit" class="edit-panel" style="display:none">
+      <div class="form-grid">
+        <div class="field full"><label>文档名称</label><input class="input" id="editName"></div>
+        <div class="field full"><label>正文</label><textarea id="editText" style="min-height:200px"></textarea></div>
+      </div>
+      <div class="toolbar">
+        <button id="saveDoc" class="primary">保存</button>
+        <button id="cancelEdit">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>新建文档</h3>
+    <div class="field" style="margin-bottom:10px"><label>文档名称</label><input class="input" id="docName" placeholder="例：灵山大佛讲解词"></div>
+    <div class="field" style="margin-bottom:10px"><label>文本内容</label><textarea id="docText" placeholder="粘贴讲解词、文史资料..."></textarea></div>
+    <div class="toolbar">
+      <button id="createText" class="primary">提交文本</button>
+      <input class="input" id="docFile" type="file" style="max-width:180px">
+      <button id="uploadFile">上传文件</button>
+    </div>
+    <hr style="border-color:var(--line);margin:16px 0">
+    <h3>检索测试</h3>
+    <div class="toolbar">
+      <input class="input" id="retrieveQuery" placeholder="输入问题测试知识库..." style="max-width:100%">
+      <button id="retrieve" class="primary">搜索</button>
+    </div>
+    <pre id="retrieveResult" class="muted" style="white-space:pre-wrap;max-height:200px;overflow:auto;font-size:12px"></pre>
+  </div>
+</section>
+
+<section id="human" class="view">
+  <div class="panel">
+    <h3>数字人形象</h3>
+    <p class="muted">点击卡片编辑。激活后游客端刷新即切换。</p>
+    <div id="humanRows" class="human-grid"><div class="empty">请先连接</div></div>
+  </div>
+  <div id="humanEditor" class="panel" style="display:none">
+    <h3 id="humanEditorTitle">编辑形象</h3>
+    <div class="form-grid">
+      <div class="field"><label>模型</label><select class="input" id="humanModel"></select></div>
+      <div class="field"><label>显示名称</label><input class="input" id="humanName"></div>
+      <div class="field"><label>声音</label><input class="input" id="humanVoice" placeholder="zh-CN-XiaoyiNeural"></div>
+      <div class="field"><label>声音风格</label><input class="input" id="humanVoiceStyle"></div>
+      <div class="field full"><label>关键词</label><input class="input" id="humanKeywords" placeholder="少女,亲和,轻快"></div>
+      <div class="field full"><label>外观描述</label><textarea id="humanAppearance" style="min-height:60px"></textarea></div>
+      <div class="field"><label>服装描述</label><textarea id="humanClothing" style="min-height:60px"></textarea></div>
+      <div class="field"><label>文化风格</label><textarea id="humanCulture" style="min-height:60px"></textarea></div>
+    </div>
+    <div class="toolbar">
+      <button id="saveHuman" class="primary">保存配置</button>
+      <button id="activateHumanBtn">保存并激活</button>
+      <button id="cancelHumanBtn">取消</button>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+(function(){
+  var TOKEN = '';
+  var docs = [];
+  var humans = [];
+  var catalog = [];
+  var editingDoc = null;
+  var editingHumanId = null;
+  var TK = 'lingshanAdminToken';
+
+  function $(id){return document.getElementById(id);}
+
+  function toast(text, cls){
+    var e = document.createElement('div');
+    e.className = 'toast ' + (cls || 'ok');
+    e.textContent = text;
+    document.body.appendChild(e);
+    setTimeout(function(){e.remove();},2500);
+  }
+
+  function esc(v){
+    v = String(v || '');
+    return v.replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function fmtDate(v){
+    if(!v) return '-';
+    if(typeof v === 'number') v = new Date(v * 1000).toISOString();
+    return String(v).substring(0, 10);
+  }
+
+  function msg(text, cls){
+    var e = $('difyStatus');
+    e.innerHTML = '<span class="dot"></span> ' + text;
+    e.className = 'status ' + (cls || '');
+  }
+
+  $('token').value = localStorage.getItem(TK) || '';
+
+  async function api(path, opt){
+    opt = opt || {};
+    var h = new Headers(opt.headers || {});
+    h.set('Authorization', 'Bearer ' + TOKEN);
+    var r = await fetch(path, {headers:h, method:opt.method||'GET', body:opt.body});
+    var txt = await r.text();
+    var j = {};
+    try { j = JSON.parse(txt); } catch(e) {}
+    if(!r.ok || (j.code && j.code !== 200)) throw new Error(j.detail || j.msg || 'HTTP '+r.status);
+    return j.data || j;
+  }
+
+  // ===== 连接 =====
+  $('cn').onclick = async function(){
+    var t = $('token').value.trim();
+    if(!t) { toast('请粘贴JWT','err'); return; }
+    TOKEN = t;
+    var btn = $('cn');
+    btn.textContent = '连接中...';
+    btn.disabled = true;
+    localStorage.setItem(TK, t);
+    try {
+      await loadDocs();
+      await loadHumans();
+      btn.textContent = '已连接';
+      btn.style.background = '#10b563';
+      btn.style.color = '#fff';
+      btn.style.borderColor = '#10b563';
+      setTimeout(function(){
+        btn.textContent = '连接后台';
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 2500);
+    } catch(e) {
+      toast(e.message, 'err');
+      btn.textContent = '连接后台';
+    }
+    btn.disabled = false;
+  };
+
+  // ===== 知识库 =====
+  async function loadDocs(){
+    var c = await api('/api/admin/knowledge/config');
+    msg('数据集: ' + c.dataset_id_masked + ' · API Key: ' + (c.api_key_configured ? '已配置' : '未配置'), c.api_key_configured ? 'ok' : '');
+    var d = await api('/api/admin/knowledge/documents?limit=100');
+    docs = d.data || d.documents || d.items || [];
+    renderDocs();
+  }
+
+  function renderDocs(){
+    var q = ($('docSearch').value || '').trim().toLowerCase();
+    var list = docs.filter(function(d){
+      return !q || String(d.name || d.document_name || '').toLowerCase().indexOf(q) !== -1;
+    });
+    if(!list.length){
+      $('docRows').innerHTML = '<tr><td class="empty" colspan="4">暂无文档</td></tr>';
+      return;
+    }
+    var html = '';
+    for(var i = 0; i < list.length; i++){
+      var d = list[i];
+      var id = d.id || d.document_id;
+      var n = d.name || d.document_name || id;
+      var status = d.indexing_status || d.status || '';
+      var sel = (editingDoc === id) ? ' sel' : '';
+      html += '<tr class="doc-row' + sel + '" data-id="' + esc(id) + '">';
+      html += '<td><span class="doc-name">' + esc(n) + '<small>' + esc(id) + '</small></span></td>';
+      html += '<td><span class="tag' + (status === 'completed' ? ' ok' : '') + '">' + esc(status || '已提交') + '</span></td>';
+      html += '<td>' + fmtDate(d.updated_at || d.created_at) + '</td>';
+      html += '<td><button class="btn-edit" data-id="' + esc(id) + '">编辑</button> ';
+      html += '<button class="danger btn-del" data-id="' + esc(id) + '" data-name="' + esc(n) + '">删除</button></td>';
+      html += '</tr>';
+    }
+    $('docRows').innerHTML = html;
+
+    // Bind events
+    var rows = $('docRows').querySelectorAll('.doc-row');
+    for(var j = 0; j < rows.length; j++){
+      rows[j].addEventListener('click', function(){
+        startEditDoc(this.getAttribute('data-id'));
+      });
+    }
+    var edits = $('docRows').querySelectorAll('.btn-edit');
+    for(var k = 0; k < edits.length; k++){
+      edits[k].addEventListener('click', function(e){
+        e.stopPropagation();
+        startEditDoc(this.getAttribute('data-id'));
+      });
+    }
+    var dels = $('docRows').querySelectorAll('.btn-del');
+    for(var m = 0; m < dels.length; m++){
+      dels[m].addEventListener('click', function(e){
+        e.stopPropagation();
+        delDoc(this.getAttribute('data-id'), this.getAttribute('data-name'));
+      });
+    }
+  }
+
+  async function startEditDoc(id){
+    if(editingDoc === id){ cancelEditDoc(); return; }
+    editingDoc = id;
+    renderDocs();
+    $('editName').value = '加载中...';
+    $('editText').value = '加载中...';
+    $('docEdit').style.display = 'block';
+    try {
+      var d = await api('/api/admin/knowledge/documents/' + encodeURIComponent(id));
+      var x = d.data || d;
+      $('editName').value = x.name || x.document_name || '';
+      $('editText').value = x.text || x.content || '';
+      $('docEdit').scrollIntoView({behavior:'smooth'});
+    } catch(e){ toast(e.message, 'err'); }
+  }
+
+  function cancelEditDoc(){
+    editingDoc = null;
+    $('docEdit').style.display = 'none';
+    renderDocs();
+  }
+
+  $('cancelEdit').onclick = cancelEditDoc;
+
+  $('saveDoc').onclick = async function(){
+    if(!editingDoc) return;
+    try {
+      await api('/api/admin/knowledge/documents/' + encodeURIComponent(editingDoc) + '/text', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: $('editName').value.trim(), text: $('editText').value, process_rule_mode: 'automatic'})
+      });
+      toast('已保存');
+      cancelEditDoc();
+      await loadDocs();
+    } catch(e){ toast(e.message, 'err'); }
+  };
+
+  async function delDoc(id, n){
+    if(!confirm('确认删除「' + n + '」？')) return;
+    try {
+      await api('/api/admin/knowledge/documents/' + encodeURIComponent(id), {method:'DELETE'});
+      toast('已删除');
+      if(editingDoc === id) cancelEditDoc();
+      await loadDocs();
+    } catch(e){ toast(e.message, 'err'); }
+  }
+
+  $('createText').onclick = async function(){
+    var n = $('docName').value.trim();
+    if(!n){ toast('请输入文档名称','err'); return; }
+    try {
+      await api('/api/admin/knowledge/documents/text', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:n, text:$('docText').value, indexing_technique:'high_quality', process_rule_mode:'automatic'})
+      });
+      toast('已提交');
+      $('docName').value = '';
+      $('docText').value = '';
+      await loadDocs();
+    } catch(e){ toast(e.message, 'err'); }
+  };
+
+  $('uploadFile').onclick = async function(){
+    var f = $('docFile').files[0];
+    if(!f){ toast('请选择文件','err'); return; }
+    var fd = new FormData();
+    fd.append('file', f);
+    try {
+      await api('/api/admin/knowledge/documents/file', {method:'POST', body:fd});
+      toast('已提交');
+      $('docFile').value = '';
+      await loadDocs();
+    } catch(e){ toast(e.message, 'err'); }
+  };
+
+  $('retrieve').onclick = async function(){
+    try {
+      var r = await api('/api/admin/knowledge/retrieve', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({query:$('retrieveQuery').value, top_k:5})
+      });
+      $('retrieveResult').textContent = JSON.stringify(r, null, 2);
+    } catch(e){ $('retrieveResult').textContent = '错误: ' + e.message; }
+  };
+
+  $('docSearch').oninput = renderDocs;
+  $('refreshDocs').onclick = loadDocs;
+
+  // ===== 数字人 =====
+  async function loadHumans(){
+    catalog = (await api('/api/digital-human/catalog')).items || [];
+    humans = (await api('/api/admin/digital-humans')).items || [];
+    var sel = $('humanModel');
+    sel.innerHTML = '';
+    for(var i = 0; i < catalog.length; i++){
+      sel.innerHTML += '<option value="' + esc(catalog[i].model_key) + '">' + esc(catalog[i].model_label) + '</option>';
+    }
+    renderHumans();
+  }
+
+  function renderHumans(){
+    if(!humans.length){
+      $('humanRows').innerHTML = '<div class="empty">暂无配置</div>';
+      return;
+    }
+    var html = '';
+    for(var i = 0; i < humans.length; i++){
+      var x = humans[i];
+      html += '<article class="human-card' + (x.is_active ? ' active' : '') + (editingHumanId === x.id ? ' sel' : '') + '" data-hid="' + x.id + '">';
+      if(x.is_active) html += '<span class="badge">激活</span>';
+      html += '<h3>' + esc(x.name) + '</h3>';
+      html += '<div class="meta">' + esc(x.model_label || x.model_key) + ' · ' + esc(x.voice_name || '') + '</div>';
+      html += '<p>' + esc(x.appearance || '') + ' · ' + esc(x.clothing || '') + '</p>';
+      html += '</article>';
+    }
+    html += '<article class="human-card ghost" id="newHumanCard"><span style="font-size:28px;color:var(--muted)">+</span></article>';
+    $('humanRows').innerHTML = html;
+
+    // Bind events
+    var cards = $('humanRows').querySelectorAll('.human-card:not(.ghost)');
+    for(var j = 0; j < cards.length; j++){
+      cards[j].addEventListener('click', function(){
+        selectHuman(parseInt(this.getAttribute('data-hid')));
+      });
+    }
+    $('newHumanCard').addEventListener('click', newHuman);
+  }
+
+  function selectHuman(id){
+    editingHumanId = id;
+    var x = humans.find(function(v){ return v.id === id; });
+    if(!x) return;
+    $('humanEditor').style.display = 'block';
+    $('humanEditorTitle').textContent = '编辑 — ' + x.name;
+    $('humanModel').value = x.model_key;
+    $('humanName').value = x.name || '';
+    $('humanVoice').value = x.voice_name || '';
+    $('humanVoiceStyle').value = x.voice_style || '';
+    $('humanKeywords').value = x.keywords || '';
+    $('humanAppearance').value = x.appearance || '';
+    $('humanClothing').value = x.clothing || '';
+    $('humanCulture').value = x.cultural_style || '';
+    $('humanEditor').scrollIntoView({behavior:'smooth'});
+    renderHumans();
+  }
+
+  function newHuman(){
+    editingHumanId = null;
+    $('humanEditor').style.display = 'block';
+    $('humanEditorTitle').textContent = '新建形象';
+    $('humanModel').value = catalog.length ? catalog[0].model_key : '';
+    $('humanName').value = '';
+    $('humanVoice').value = 'zh-CN-XiaoyiNeural';
+    $('humanVoiceStyle').value = '';
+    $('humanKeywords').value = '';
+    $('humanAppearance').value = '';
+    $('humanClothing').value = '';
+    $('humanCulture').value = '';
+    $('humanEditor').scrollIntoView({behavior:'smooth'});
+    renderHumans();
+  }
+
+  function humanBody(active){
+    var h = {
+      model_key: $('humanModel').value,
+      name: $('humanName').value.trim(),
+      voice_name: $('humanVoice').value.trim(),
+      voice_style: $('humanVoiceStyle').value.trim(),
+      keywords: $('humanKeywords').value.trim(),
+      appearance: $('humanAppearance').value.trim(),
+      clothing: $('humanClothing').value.trim(),
+      cultural_style: $('humanCulture').value.trim()
+    };
+    if(active !== undefined) h.is_active = active;
+    return h;
+  }
+
+  $('cancelHumanBtn').onclick = function(){
+    $('humanEditor').style.display = 'none';
+    editingHumanId = null;
+    renderHumans();
+  };
+
+  $('saveHuman').onclick = function(){ saveHuman(false); };
+  $('activateHumanBtn').onclick = function(){ saveHuman(true); };
+
+  async function saveHuman(active){
+    var b = humanBody(active);
+    try {
+      if(editingHumanId){
+        await api('/api/admin/digital-humans/' + editingHumanId, {
+          method:'PUT',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(b)
+        });
+        toast('已保存「' + b.name + '」');
+      } else {
+        var r = await api('/api/admin/digital-humans', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(b)
+        });
+        toast('已创建「' + b.name + '」');
+        editingHumanId = r.id;
+      }
+      await loadHumans();
+      if(editingHumanId) selectHuman(editingHumanId);
+    } catch(e){ toast(e.message, 'err'); }
+  }
+
+  // ===== 标签页 =====
+  var tabs = document.querySelectorAll('.tab');
+  for(var i = 0; i < tabs.length; i++){
+    tabs[i].addEventListener('click', function(){
+      var v = this.getAttribute('data-view');
+      document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('active'); });
+      document.querySelectorAll('.view').forEach(function(x){ x.classList.remove('active'); });
+      this.classList.add('active');
+      $(v).classList.add('active');
+    });
+  }
+
+  // ===== 自动重连 =====
+  if($('token').value.trim()){ $('cn').click(); }
+
+})();
+</script>
+</body>
+</html>

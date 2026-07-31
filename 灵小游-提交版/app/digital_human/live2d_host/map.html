@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>灵山景区地图导航</title>
+<link rel="stylesheet" href="/digital-human-3d/leaflet/leaflet.css" />
+<style>
+:root{color-scheme:light}*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Microsoft YaHei",Arial,sans-serif;background:#eef2f5;color:#1a2533;height:100vh;display:flex;flex-direction:column}
+.topbar{z-index:10;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#fff;border-bottom:1px solid #e1e6eb}
+.topbar h1{font-size:16px;font-weight:600}
+.topbar a{color:#3385ff;text-decoration:none;font-size:13px;margin-left:auto;padding:4px 10px;border:1px solid #d8dfe6;border-radius:4px}
+.topbar a:hover{border-color:#3385ff}
+.main{flex:1;display:flex;min-height:0;position:relative}
+.sidebar{width:340px;background:#fff;border-right:1px solid #e1e6eb;display:flex;flex-direction:column;overflow:hidden}
+#map{flex:1;z-index:1}
+.route-list{flex:1;overflow-y:auto}
+.route-card{padding:12px 16px;border-bottom:1px solid #eef2f5;cursor:pointer;transition:background .15s}
+.route-card:hover{background:#f7f9fc}
+.route-card.selected{background:#f0f7ff;border-left:3px solid #3385ff;padding-left:13px}
+.route-card .nm{font-size:14px;font-weight:600}
+.route-card .cat{font-size:11px;color:#7a8a9d;margin-top:2px}
+.route-empty{padding:30px 20px;text-align:center;color:#8b9aab;font-size:13px}
+
+/* floating navigation button */
+.nav-float{display:none;position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:1000}
+.nav-float.show{display:flex;gap:10px}
+.nav-float button{padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;border:0;box-shadow:0 4px 20px rgba(51,133,255,.35);transition:all .2s}
+.nav-float .nav-go{background:#3385ff;color:#fff}
+.nav-float .nav-go:hover{background:#1f6ad9;transform:scale(1.03)}
+.nav-float .nav-go.playing{background:#ef4444}
+.nav-float .nav-cancel{background:#fff;color:#5a6b7e;border:1px solid #d8dfe6;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.nav-float .nav-cancel:hover{background:#f5f7fa}
+
+/* route info bar */
+.route-info{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:#fff;border-radius:8px;padding:10px 18px;box-shadow:0 2px 12px rgba(0,0,0,.12);font-size:13px;gap:14px;align-items:center}
+.route-info.show{display:flex}
+.route-info b{color:#3385ff}
+
+/* voice status */
+.voice-badge{display:none;position:absolute;top:54px;left:50%;transform:translateX(-50%);z-index:1000;background:#10b563;color:#fff;padding:4px 12px;border-radius:999px;font-size:11px}
+.voice-badge.show{display:block}
+.voice-badge.speaking{background:#f76b1c;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+.marker-icon{font-size:18px;cursor:pointer;filter:drop-shadow(0 2px 3px rgba(0,0,0,.2))}
+
+@media(max-width:700px){.sidebar{width:260px}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>灵山胜境 · 景区导航</h1>
+  <a href="/digital-human-3d">← 返回数字人</a>
+</div>
+
+<div class="main">
+  <aside class="sidebar">
+    <div class="route-list" id="spotList"><div class="route-empty">加载景点中...</div></div>
+  </aside>
+  <div id="map"></div>
+
+  <!-- floating navigation button -->
+  <div class="nav-float" id="navFloat">
+    <button class="nav-cancel" id="navCancel">取消</button>
+    <button class="nav-go" id="navGo">🧭 开始语音导航</button>
+  </div>
+
+  <!-- route info -->
+  <div class="route-info" id="routeInfo"></div>
+  <div class="voice-badge" id="voiceBadge">🔊 语音导航中</div>
+</div>
+
+<script src="/digital-human-3d/leaflet/leaflet.js"></script>
+<script>
+const CENTER = [31.4258, 120.1030];
+const SCALE = 1.45;
+function scale(lat,lng){return[CENTER[0]+(lat-CENTER[0])*SCALE, CENTER[1]+(lng-CENTER[1])*SCALE]}
+
+const TEST_LOC = [31.42472, 120.10372];   // 模拟点位：传入后端用（后端内部做缩放）
+const TEST_LOC_SCALED = scale(...TEST_LOC); // 缩放后坐标：地图上显示定位点用
+let spots = [], spotMarkers = new Map();
+let routeLine = null, routeHalo = null;
+let startMarker = null, endMarker = null;
+let selectedSpot = null;
+let navActive = false, navAudio = null, navStepIdx = 0;
+let userLocMarker = null;  // 模拟定位点标记
+
+const map = L.map('map',{attributionControl:false,zoomControl:true}).setView(CENTER,15);
+L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:18}).addTo(map);
+
+const catIcons = {'佛像':'🪷','建筑':'🏛️','演出':'🎭','体验':'🤲','自然':'🌸','服务':'ℹ️'};
+const ROUTE_COLORS = ['#3385ff','#f76b1c','#10b563','#9b59b6'];
+
+// ── 模拟定位点：蓝底白色定位圈 + 脉冲圆环 ──
+const userLocIcon = L.divIcon({
+  html: `<div style="position:relative;width:36px;height:36px">
+    <div style="position:absolute;inset:-6px;border-radius:50%;border:3px solid #3385ff;opacity:.35;animation:locPulse 2s ease-out infinite"></div>
+    <div style="position:absolute;inset:0;border-radius:50%;background:#fff;box-shadow:0 2px 12px rgba(51,133,255,.45);display:flex;align-items:center;justify-content:center">
+      <div style="width:14px;height:14px;border-radius:50%;background:#3385ff"></div>
+    </div>
+  </div>
+  <style>@keyframes locPulse{0%{transform:scale(1);opacity:.4}100%{transform:scale(2);opacity:0}}</style>`,
+  iconSize: [36, 36],
+  iconAnchor: [18, 18]
+});
+
+// 定位标记放在缩放坐标上，与景点/路线坐标系一致
+userLocMarker = L.marker(TEST_LOC_SCALED, {
+  icon: userLocIcon,
+  zIndexOffset: 9999
+}).addTo(map).bindPopup('<b>模拟定位点</b><br><small>景区入口 · 导览起点</small>');
+
+// Load spots
+fetch('/api/map/spots').then(r=>r.json()).then(geo=>{
+  for(const f of geo.features||[]){
+    const [lng,lat] = f.geometry.coordinates;
+    const p = f.properties;
+    const s = {id:p.id,name:p.name,category:p.category,description:p.description,lat,lng};
+    spots.push(s);
+    const m = L.marker([lat,lng],{icon:L.divIcon({html:`<div class="marker-icon">${catIcons[p.category]||'📍'}</div>`,iconSize:[26,26],iconAnchor:[13,13]})})
+      .addTo(map).bindPopup(`<b>${p.name}</b><br><small>${p.category||''}</small>`);
+    m.on('click',()=>selectSpot(s));
+    spotMarkers.set(s.id,m);
+  }
+  renderSpotList();
+  // check URL param for target
+  const q = new URLSearchParams(location.search);
+  const tid = q.get('target_spot_id');
+  if(tid) selectSpot(spots.find(s=>String(s.id)===tid));
+});
+
+function renderSpotList(){
+  const el = document.getElementById('spotList');
+  el.innerHTML = spots.length
+    ? spots.map(s=>`<div class="route-card" data-id="${s.id}" onclick="selectSpotById('${s.id}')"><div class="nm">${s.name}</div><div class="cat">${s.category||'景点'}</div></div>`).join('')
+    : '<div class="route-empty">暂无景点数据</div>';
+}
+
+// ── Select spot (show nav button) ──
+window.selectSpotById = id => selectSpot(spots.find(s=>String(s.id)===id));
+
+function selectSpot(spot){
+  if(!spot||navActive)return;
+  selectedSpot = spot;
+  document.querySelectorAll('.route-card').forEach(c=>c.classList.toggle('selected',c.dataset.id===String(spot.id)));
+  document.getElementById('navFloat').classList.add('show');
+  map.flyTo([spot.lat,spot.lng],16,{duration:.5});
+}
+
+// ── Cancel ──
+document.getElementById('navCancel').onclick = ()=>{
+  selectedSpot = null;
+  document.getElementById('navFloat').classList.remove('show');
+  document.querySelectorAll('.route-card').forEach(c=>c.classList.remove('selected'));
+  clearRoute();
+};
+
+// ── Start voice navigation ──
+document.getElementById('navGo').onclick = async ()=>{
+  if(!selectedSpot)return;
+  if(navActive){stopNav();return}
+
+  const btn = document.getElementById('navGo');
+  btn.classList.add('playing');
+  btn.textContent = '⏹ 停止导航';
+
+  try{
+    const r = await fetch('/api/map/route/live',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({latitude:TEST_LOC[0],longitude:TEST_LOC[1],target_spot_id:selectedSpot.id})
+    });
+    if(!r.ok)throw new Error('路线加载失败');
+    const feat = await r.json();
+    showRoute(feat);
+    navActive = true;
+    startVoiceNav(feat);
+  }catch(e){
+    alert('导航失败：'+e.message);
+    stopNav();
+  }
+};
+
+function showRoute(feat){
+  clearRoute();
+  const coords = feat.geometry.coordinates.map(([lng,lat])=>[lat,lng]);
+  routeHalo = L.polyline(coords,{color:'#fff',weight:9,opacity:.85}).addTo(map);
+  routeLine = L.polyline(coords,{color:feat.properties.color||'#0ea5e9',weight:5}).addTo(map);
+  const wps = feat.properties.waypoints||[];
+  if(wps.length){
+    startMarker = L.marker([wps[0].lat,wps[0].lng],{icon:pinIcon('起','#10b563')}).addTo(map);
+    endMarker = L.marker([wps[wps.length-1].lat,wps[wps.length-1].lng],{icon:pinIcon('终','#ef4444')}).addTo(map);
+  }
+  map.fitBounds(L.latLngBounds(coords),{padding:[60,60],maxZoom:17});
+
+  // route info
+  const p = feat.properties;
+  document.getElementById('routeInfo').innerHTML = `<b>${p.name}</b> · ${(p.total_distance_m/1000).toFixed(1)}km · 约${p.walking_min}分钟`;
+  document.getElementById('routeInfo').classList.add('show');
+}
+
+function pinIcon(label,color){
+  return L.divIcon({html:`<div style="width:28px;height:36px;position:relative"><svg viewBox="0 0 30 38" style="width:100%;height:100%;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))"><path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 23 15 23s15-12 15-23C30 6.7 23.3 0 15 0z" fill="${color}"/></svg><div style="position:absolute;top:6px;left:0;right:0;text-align:center;color:#fff;font-size:12px;font-weight:700">${label}</div></div>`,iconSize:[28,36],iconAnchor:[14,36]});
+}
+
+function clearRoute(){
+  [routeHalo,routeLine,startMarker,endMarker].forEach(l=>{if(l){map.removeLayer(l)}});
+  routeHalo=routeLine=startMarker=endMarker=null;
+  document.getElementById('routeInfo').classList.remove('show');
+  document.getElementById('voiceBadge').classList.remove('show','speaking');
+}
+
+// ── Voice navigation (TTS step-by-step) ──
+async function speakTTS(text){
+  const clean = (text||'').trim(); if(!clean)return;
+  try{
+    if(navAudio){navAudio.pause();navAudio=null}
+    const r = await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:clean})});
+    if(!r.ok)return;
+    const p = await r.json();
+    const bytes = Uint8Array.from(atob(p.audio),c=>c.charCodeAt(0));
+    const blob = new Blob([bytes],{type:p.audio_mime||'audio/mpeg'});
+    navAudio = new Audio(URL.createObjectURL(blob));
+    await new Promise(res=>{navAudio.onended=()=>{URL.revokeObjectURL(navAudio.src);navAudio=null;res()};navAudio.onerror=()=>{navAudio=null;res()};navAudio.play().catch(()=>res())});
+  }catch(e){console.warn('TTS error',e)}
+}
+
+async function startVoiceNav(feat){
+  const steps = feat.properties.steps||[];
+  const wps = feat.properties.waypoints||[];
+  if(!steps.length)return;
+  navStepIdx = 0;
+  const badge = document.getElementById('voiceBadge');
+  badge.classList.add('show');
+
+  // intro
+  badge.classList.add('speaking');
+  await speakTTS(`开始导航前往${feat.properties.end_name}。全程约${feat.properties.walking_min}分钟，共${steps.length}段。`);
+  badge.classList.remove('speaking');
+  if(!navActive)return;
+
+  for(let i=0;i<steps.length;i++){
+    if(!navActive)return;
+    const s = steps[i];
+    badge.classList.add('speaking');
+    await speakTTS(s.instruction);
+    badge.classList.remove('speaking');
+    navStepIdx = i+1;
+  }
+
+  if(navActive){
+    badge.classList.add('speaking');
+    await speakTTS(`已到达${feat.properties.end_name}，导航结束。`);
+    badge.classList.remove('speaking');
+  }
+  stopNav();
+}
+
+function stopNav(){
+  navActive=false;
+  if(navAudio){navAudio.pause();navAudio=null}
+  document.getElementById('voiceBadge').classList.remove('show','speaking');
+  const btn = document.getElementById('navGo');
+  btn.classList.remove('playing');
+  btn.textContent = '🧭 开始语音导航';
+}
+</script>
+</body>
+</html>

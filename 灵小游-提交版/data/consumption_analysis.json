@@ -1,0 +1,191 @@
+{
+  "source": "景点景区旅游数据行为分析数据.xlsx",
+  "basis_columns": [
+    "tourist_id",
+    "user_nickname",
+    "age",
+    "gender",
+    "attraction_name",
+    "attraction_content",
+    "attraction_type",
+    "visit_date",
+    "stay_duration",
+    "ticket_cost",
+    "food_cost",
+    "shopping_cost",
+    "transport_cost",
+    "entertainment_cost",
+    "total_cost",
+    "group_size",
+    "satisfaction"
+  ],
+  "record_count": 140447,
+  "financial": {
+    "total_revenue": 97313832.58,
+    "average_spend": 692.89,
+    "average_group_size": 2.62,
+    "average_satisfaction": 3.72,
+    "cost_breakdown": [
+      {
+        "key": "ticket",
+        "name": "门票消费",
+        "amount": 14149442.4,
+        "ratio": 14.54
+      },
+      {
+        "key": "food",
+        "name": "餐饮消费",
+        "amount": 27539215.88,
+        "ratio": 28.3
+      },
+      {
+        "key": "shopping",
+        "name": "购物消费",
+        "amount": 29525869.92,
+        "ratio": 30.34
+      },
+      {
+        "key": "transport",
+        "name": "交通消费",
+        "amount": 10183860.34,
+        "ratio": 10.46
+      },
+      {
+        "key": "entertainment",
+        "name": "娱乐消费",
+        "amount": 15915443.76,
+        "ratio": 16.35
+      }
+    ]
+  },
+  "segments": {
+    "gender": [
+      {
+        "name": "男",
+        "count": 70329
+      },
+      {
+        "name": "女",
+        "count": 70118
+      }
+    ],
+    "age_groups": [
+      {
+        "name": "18岁以下",
+        "count": 0
+      },
+      {
+        "name": "18-30岁",
+        "count": 49866
+      },
+      {
+        "name": "31-45岁",
+        "count": 55674
+      },
+      {
+        "name": "46-60岁",
+        "count": 24030
+      },
+      {
+        "name": "60岁以上",
+        "count": 10877
+      }
+    ],
+    "attraction_types": [
+      {
+        "name": "古镇水乡",
+        "count": 31564
+      },
+      {
+        "name": "风景名胜与休闲度假",
+        "count": 25682
+      },
+      {
+        "name": "主题乐园",
+        "count": 17524
+      },
+      {
+        "name": "动植物园与水族馆",
+        "count": 16302
+      },
+      {
+        "name": "现代地标",
+        "count": 16257
+      },
+      {
+        "name": "博物馆与展馆",
+        "count": 12297
+      },
+      {
+        "name": "自然公园",
+        "count": 11717
+      },
+      {
+        "name": "历史文化",
+        "count": 9104
+      }
+    ]
+  },
+  "monthly": [
+    {
+      "month": "2025-01",
+      "visitors": 3450,
+      "revenue": 2621551.1100000055
+    },
+    {
+      "month": "2025-02",
+      "visitors": 3581,
+      "revenue": 2704290.3600000064
+    },
+    {
+      "month": "2025-03",
+      "visitors": 8261,
+      "revenue": 6024511.419999985
+    },
+    {
+      "month": "2025-04",
+      "visitors": 12434,
+      "revenue": 9173823.13999995
+    },
+    {
+      "month": "2025-05",
+      "visitors": 13936,
+      "revenue": 9932071.829999931
+    },
+    {
+      "month": "2025-06",
+      "visitors": 11562,
+      "revenue": 8022529.300000021
+    },
+    {
+      "month": "2025-07",
+      "visitors": 15493,
+      "revenue": 10825908.270000035
+    },
+    {
+      "month": "2025-08",
+      "visitors": 17188,
+      "revenue": 12065809.520000027
+    },
+    {
+      "month": "2025-09",
+      "visitors": 17616,
+      "revenue": 12195332.440000076
+    },
+    {
+      "month": "2025-10",
+      "visitors": 11189,
+      "revenue": 7076287.110000001
+    },
+    {
+      "month": "2025-11",
+      "visitors": 10853,
+      "revenue": 6801789.33999996
+    },
+    {
+      "month": "2025-12",
+      "visitors": 14884,
+      "revenue": 9869928.739999993
+    }
+  ]
+}

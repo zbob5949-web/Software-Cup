@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TypeScript HTML App</title>
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      margin: 0;
+      background: transparent;
+    }
+    /* Scenic green gradient background - replaces black canvas */
+    html::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background: linear-gradient(170deg, #e8f5e9 0%, #c8e6c9 20%, #a5d6a7 40%, #81c784 60%, #66bb6a 80%, #4caf50 100%);
+      opacity: 0.35;
+    }
+    html::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        radial-gradient(ellipse 120% 30% at 50% 100%, rgba(255,255,255,0.25) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 20% 50%, rgba(255,255,255,0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 35% at 80% 40%, rgba(255,255,255,0.08) 0%, transparent 55%);
+    }
+    .hide-ui #desk-toggle,
+    .hide-ui #voice-test-panel { display: none !important; }
+    html {
+      overscroll-behavior-x: none;
+      touch-action: none;
+    }
+    body {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    body > canvas:only-child {
+      width: 100vw;
+      height: 100vh;
+    }
+    #avatarCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    /* ✅ 切换按钮样式 */
+    #desk-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      background-color: #007bff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      z-index: 1000;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      transition: background-color 0.3s;
+    }
+    #desk-toggle:hover {
+      background-color: #0056b3;
+    }
+    #desk-toggle:active {
+      transform: translateY(2px);
+    }
+    #desk-toggle.active {
+      background-color: #28a745;
+    }
+    #voice-test-panel {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      width: min(390px, calc(100vw - 40px));
+      padding: 16px;
+      color: #172033;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(30, 65, 105, 0.18);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(20, 50, 80, 0.2);
+      z-index: 1100;
+      font-family: Arial, sans-serif;
+    }
+    #voice-test-panel h2 { margin: 0 0 10px; font-size: 18px; }
+    #voice-test-panel .test-row { display: flex; gap: 8px; margin-top: 8px; }
+    #voice-test-panel input[type="text"] { flex: 1; min-width: 0; padding: 9px; border: 1px solid #c7d1df; border-radius: 6px; }
+    #voice-test-panel button { padding: 9px 12px; color: #fff; background: #1769aa; border: 0; border-radius: 6px; cursor: pointer; }
+    #voice-test-panel button:disabled { opacity: .55; cursor: wait; }
+    #voice-test-panel input[type="file"] { flex: 1; min-width: 0; font-size: 12px; }
+    #voice-test-status { margin-top: 10px; color: #536274; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+    /* 隐藏UI模式：供 embed 场景使用 */
+    .hide-ui #desk-toggle,
+    .hide-ui #voice-test-panel { display: none !important; }  </style>
+  <script>
+  if (new URLSearchParams(location.search).get('hideUI') === '1') {
+    document.documentElement.classList.add('hide-ui');
+  }
+  </script>
+  <!-- Live2DCubismCore script -->
+  <script src = "./Core/live2dcubismcore.js"></script>
+  <!-- Build script -->
+  <script type="module" crossorigin src="./assets/index-DffYYmdh.js"></script>
+</head>
+<body>
+  <button id="desk-toggle">🪑 吧台模式</button>  <section id="voice-test-panel" aria-label="网页语音测试">
+    <h2>数字人语音测试</h2>
+    <div class="test-row">
+      <input id="tts-text" type="text" value="你好，请介绍一下你自己。" aria-label="TTS文字">
+      <button id="tts-send" type="button">发送并播报</button>
+    </div>
+    <div class="test-row">
+      <input id="asr-file" type="file" accept="audio/wav,audio/mpeg,audio/mp3,audio/x-wav" aria-label="ASR音频文件">
+      <button id="asr-send" type="button">识别并播报</button>
+    </div>
+    <div id="voice-test-status">正在连接原景区项目 API（8000）...</div>
+  </section>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "systemInfo": {
+    "systemName": "灵山胜境AI导览系统",
+    "contactPhone": "400-123-4567",
+    "contactEmail": "service@lingshan.com",
+    "copyright": "© 2026 灵山景区",
+    "beian": "苏ICP备2024xxxxxx号"
+  },
+  "apiConfig": {
+    "weatherApi": "",
+    "weatherKey": "",
+    "llmApi": "https://api.deepseek.com/v1",
+    "llmModel": "deepseek-chat",
+    "dbHost": "localhost",
+    "dbPort": "3306",
+    "dbName": "scenic_guide_db",
+    "dbUser": "root",
+    "dbPassword": ""
+  }
+}

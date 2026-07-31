@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>灵小游 · 数字人导览集成演示</title>
+<style>
+:root{
+  --bg:#0c1318; --panel:#141e24; --line:#26333b; --muted:#6e8a99;
+  --accent:#5ec4a0; --accent2:#3b9fd4; --warn:#e2a654; --danger:#e27e91;
+  font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;color:#e1ece8;background:var(--bg);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:var(--bg);overflow:hidden}
+
+/* ---- layout ---- */
+.app{height:100vh;display:grid;grid-template-columns:1fr 480px;grid-template-rows:100vh}
+.stage{position:relative;overflow:hidden;background:transparent}
+.avatar{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent}
+
+/* ---- top left overlay ---- */
+.overlay{position:absolute;top:16px;left:16px;right:16px;z-index:3;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none}
+.overlay>*{pointer-events:auto}
+.brand h1{margin:0;font-size:26px;font-weight:700;line-height:1.2}
+.brand .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;line-height:1}
+.badge.ok{background:#1a3a2a;color:var(--accent)}
+.badge.warn{background:#3a2a14;color:var(--warn)}
+.badge.off{background:#2a1a1a;color:var(--danger)}
+.badge.info{background:#142238;color:var(--accent2)}
+
+/* ---- right panel ---- */
+.sidebar{height:100vh;display:grid;grid-template-rows:auto auto 1fr auto;border-left:1px solid var(--line);background:var(--panel);overflow:hidden}
+
+/* -- model switcher -- */
+.model-bar{padding:16px 18px 12px;border-bottom:1px solid var(--line);background:rgba(0,0,0,0.2)}
+.model-bar h3{font-size:14px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.model-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mcard{border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all .2s;background:#19242a}
+.mcard:hover{border-color:var(--accent2)}
+.mcard.active{border-color:var(--accent);background:#162822;box-shadow:0 0 0 1px var(--accent)}
+.mcard .av{font-size:28px;margin-bottom:4px}
+.mcard .nm{font-size:12px;font-weight:600}
+.mcard .vo{font-size:10px;color:var(--muted);margin-top:2px}
+.mcard .act{font-size:10px;color:var(--accent);margin-top:2px}
+.mcard .switching{animation:pulse .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* -- status row -- */
+.status-row{padding:10px 18px;border-bottom:1px solid var(--line);display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted);background:#10191e}
+.status-row .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.status-row .dot.g{background:var(--accent)}.status-row .dot.r{background:var(--danger)}.status-row .dot.y{background:var(--warn)}
+
+/* -- chat -- */
+.chat-body{min-height:0;display:grid;grid-template-rows:1fr auto;overflow:hidden}
+.messages{min-height:0;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.messages::-webkit-scrollbar{width:5px}
+.messages::-webkit-scrollbar-thumb{background:#26333b;border-radius:3px}
+
+.bubble{max-width:90%;padding:10px 14px;border-radius:8px;line-height:1.55;font-size:14px;white-space:pre-wrap;word-break:break-word}
+.bubble.user{align-self:flex-end;background:var(--accent);color:#0a1e17;border-bottom-right-radius:2px}
+.bubble.assistant{align-self:flex-start;background:#1b2a31;border-bottom-left-radius:2px}
+.bubble .meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;gap:8px}
+
+.composer{display:grid;grid-template-columns:50px 1fr 54px;gap:8px;padding:12px 18px 16px;border-top:1px solid var(--line);background:#0e171d}
+.composer input{height:42px;padding:0 12px;border:1px solid var(--line);border-radius:7px;color:#e1ece8;background:#10191e;outline:0;font-size:14px}
+.composer input:focus{border-color:var(--accent)}
+.composer button{height:42px;border:1px solid var(--line);border-radius:7px;color:#e1ece8;background:#19242a;cursor:pointer;font-size:13px;transition:all .15s}
+.composer button:hover{border-color:var(--accent2)}.composer button:disabled{opacity:.45}
+.composer .primary{color:#0a1e17;background:var(--accent);border-color:var(--accent);font-weight:600}
+.composer .primary:hover{background:#4cb38e}
+.recording{color:#fff!important;background:var(--danger)!important;border-color:var(--danger)!important}
+
+/* -- info footer -- */
+.info-foot{padding:8px 18px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:10px;color:var(--muted);background:#0e171d}
+
+/* ---- responsive ---- */
+@media(max-width:960px){.app{grid-template-columns:1fr;grid-template-rows:55vh auto}.sidebar{height:45vh;grid-template-rows:auto auto 1fr auto}.model-cards{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:520px){.model-cards{grid-template-columns:repeat(3,1fr);gap:4px}.mcard{padding:6px}.mcard .av{font-size:22px}.composer{grid-template-columns:40px 1fr 50px;gap:6px;padding:8px 10px 12px}}
+/* embed 模式：白底 */
+body.embed-mode{background:#ffffff}
+body.embed-mode .stage{background:#ffffff}
+body.embed-mode .sidebar{display:none}
+body.embed-mode .overlay{display:none}
+body.embed-mode .app{grid-template-columns:1fr}
+</style>
+<script>
+(function(){if(location.search.includes('embed=1'))document.body.classList.add('embed-mode')})();
+</script>
+</head>
+<body>
+
+<main class="app">
+  <!-- ═══ 左侧：Live2D 数字人舞台 ═══ -->
+  <section class="stage">
+    <iframe id="live2dFrame" class="avatar" allow="autoplay"
+            src=""></iframe>
+
+    <div class="overlay">
+      <div class="brand">
+        <h1>灵小游</h1>
+        <div class="sub">Live2D 数字人 · 景区智能导览</div>
+      </div>
+      <div class="badges">
+        <span class="badge info" id="badgeModel">Haru</span>
+        <span class="badge ok" id="badgeVoice">Xiaoyi</span>
+        <span class="badge ok" id="badgeDify">Dify 检测中</span>
+        <a class="badge info" href="/digital-human-3d/map">🗺 地图</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 右侧：集成控制面板 ═══ -->
+  <aside class="sidebar">
+
+    <!-- ── 数字人形象切换卡片 ── -->
+    <div class="model-bar">
+      <h3>🎭 选择数字人形象 <span style="font-weight:400;font-size:11px">（切换后立即生效）</span></h3>
+      <div class="model-cards" id="modelCards">
+        <div class="mcard active" data-id="1" data-key="live2d_haru">
+          <div class="av">🌸</div><div class="nm">Haru</div><div class="vo">Xiaoyi · 清亮活泼</div>
+        </div>
+        <div class="mcard" data-id="2" data-key="live2d_hiyori">
+          <div class="av">🍃</div><div class="nm">Hiyori</div><div class="vo">Xiaoxiao · 清新温柔</div>
+        </div>
+        <div class="mcard" data-id="3" data-key="live2d_mao">
+          <div class="av">⭐</div><div class="nm">Mao</div><div class="vo">Xiaoyi · 元气活力</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 系统状态行 ── -->
+    <div class="status-row">
+      <span><span class="dot g" id="dotModel"></span> 激活形象：<b id="txtModel">--</b></span>
+      <span><span class="dot g" id="dotTTS"></span> TTS声音：<b id="txtVoice">--</b></span>
+      <span><span class="dot g" id="dotDify"></span> Dify：<b id="txtDify">检测中</b></span>
+      <span style="margin-left:auto" id="txtSpeechQueue"></span>
+    </div>
+
+    <!-- ── 聊天区 ── -->
+    <div class="chat-body">
+      <div id="messages" class="messages"></div>
+      <form id="composer" class="composer">
+        <button id="recordBtn" type="button" title="语音输入">🎤</button>
+        <input id="textInput" autocomplete="off" placeholder="输入问题，体验完整交互链路...">
+        <button id="sendBtn" class="primary" type="submit">发送</button>
+      </form>
+    </div>
+
+    <!-- ── 页脚信息 ── -->
+    <div class="info-foot">
+      <span id="footSession">会话：新对话</span>
+      <span id="footSource">来源：--</span>
+    </div>
+  </aside>
+</main>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   灵小游 Live2D 数字人 · 集成演示前端
+   展示：模型切换 / Dify状态 / 逐句TTS / 口型同步 / 情感+手势
+   ══════════════════════════════════════════════════════════════════════ */
+
+const $ = id => document.getElementById(id);
+const frame = $('live2dFrame');
+const messages = $('messages');
+const input = $('textInput');
+const sendBtn = $('sendBtn');
+const recordBtn = $('recordBtn');
+
+/* ── 根据当前页面 URL 参数动态设置内嵌 iframe 的 API 地址 ── */
+(function initLive2dFrame() {
+  const params = new URLSearchParams(location.search);
+  const api = params.get('api') || (location.origin + '/');
+  const model = params.get('model') || 'Haru';
+  const hideUI = params.get('hideUI');
+  let src = '/live2d/index.html?embed=1&api=' + encodeURIComponent(api);
+  if (model) src += '&model=' + encodeURIComponent(model);
+  if (hideUI === '1') src += '&hideUI=1';
+  if (frame) frame.src = src;
+})();
+
+/* ── 全局状态 ── */
+let busy = false;
+let sessionId = localStorage.getItem('digitalHuman3dSessionId') || '';
+let mediaRecorder = null, chunks = [];
+let speechCancelToken = 0;
+let adminToken = '';
+let activeModel = { id: 1, model_key: 'live2d_haru', model_dir: 'Haru', voice_name: 'zh-CN-XiaoyiNeural', name: 'Haru 灵小游' };
+
+/* ═══════════════════════════════════════════════════
+   1. 数字人形象切换
+   ═══════════════════════════════════════════════════ */
+
+async function switchModel(cardEl) {
+  const id = cardEl.dataset.id;
+  const key = cardEl.dataset.key;
+  if (!id) return;
+
+  // 视觉反馈
+  document.querySelectorAll('.mcard').forEach(c => c.classList.remove('active'));
+  cardEl.classList.add('active');
+
+  try {
+    // 调用公开切换接口
+    const resp = await fetch('/api/digital-human/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_key: key })
+    });
+    const data = await resp.json();
+    if (data.code !== 200) {
+      console.warn('切换失败：', data.msg);
+    }
+  } catch (e) {
+    console.warn('切换请求失败（可能需要管理员登录），降级从 /api/digital-human/current 读取');
+  }
+
+  // 等待一小段让数据库更新，然后刷新
+  await new Promise(r => setTimeout(r, 200));
+  await refreshActiveModel();
+}
+
+async function refreshActiveModel() {
+  try {
+    const r = await fetch('/api/digital-human/current');
+    const d = (await r.json()).data || {};
+    activeModel = d;
+
+    // 更新 Live2D iframe
+    const model = d.model_dir || 'Haru';
+    frame.src = `/live2d/index.html?embed=1&model=${encodeURIComponent(model)}&api=${encodeURIComponent(location.origin)}`;
+
+    // 更新 UI
+    $('txtModel').textContent = d.name || model;
+    $('txtVoice').textContent = d.voice_name || '--';
+    $('badgeModel').textContent = model;
+    $('badgeVoice').textContent = (d.voice_name || '').replace('zh-CN-', '').replace('Neural', '');
+
+    // 高亮对应卡片
+    document.querySelectorAll('.mcard').forEach(c => {
+      c.classList.toggle('active', c.dataset.key === d.model_key);
+    });
+
+    // 刷新 Dify 状态
+    checkDifyStatus();
+  } catch (e) {
+    console.warn('刷新模型信息失败', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   2. Dify 知识库状态检测
+   ═══════════════════════════════════════════════════ */
+
+async function checkDifyStatus() {
+  const dot = $('dotDify');
+  const txt = $('txtDify');
+  const badge = $('badgeDify');
+
+  try {
+    const resp = await fetch('/api/digital-human/dify-status');
+    const d = (await resp.json()).data || {};
+
+    if (!d.api_key_configured) {
+      dot.className = 'dot y';
+      txt.textContent = 'API Key 未配置';
+      txt.style.color = 'var(--warn)';
+      badge.className = 'badge warn';
+      badge.textContent = 'Dify ⚠';
+    } else if (d.reachable) {
+      dot.className = 'dot g';
+      txt.textContent = '已连接 ✅';
+      txt.style.color = 'var(--accent)';
+      badge.className = 'badge ok';
+      badge.textContent = 'Dify ✓';
+    } else {
+      dot.className = 'dot r';
+      txt.textContent = '不可达（Docker未启动）';
+      txt.style.color = 'var(--danger)';
+      badge.className = 'badge off';
+      badge.textContent = 'Dify ✗';
+    }
+  } catch {
+    dot.className = 'dot r';
+    txt.textContent = '检测失败';
+    badge.className = 'badge off';
+    badge.textContent = 'Dify ?';
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   3. 聊天 & TTS 逐句播放
+   ═══════════════════════════════════════════════════ */
+
+function addBubble(role, text, meta) {
+  const el = document.createElement('div');
+  el.className = 'bubble ' + role;
+  el.textContent = text;
+  if (meta) {
+    const m = document.createElement('div');
+    m.className = 'meta';
+    m.textContent = meta;
+    el.appendChild(m);
+  }
+  messages.appendChild(el);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function setBusy(v) {
+  busy = v;
+  sendBtn.disabled = v;
+  recordBtn.disabled = v;
+}
+
+function emotion(text) {
+  if (/抱歉|无法|失败|遗憾/.test(text)) return 'sad';
+  if (/注意|提醒|下雨|危险/.test(text)) return 'surprised';
+  if (/禁止|严禁|请勿/.test(text)) return 'angry';
+  if (/谢谢|欢迎|很好|推荐|可以/.test(text)) return 'happy';
+  return 'relaxed';
+}
+
+function gesture(text, e) {
+  if (e === 'sad') return 'soft';
+  if (e === 'surprised') return 'alert';
+  if (/路线|怎么走|入口|附近|推荐/.test(text)) return 'point';
+  if (/你好|欢迎/.test(text)) return 'welcome';
+  return 'explain';
+}
+
+function waitSpeech(timeoutMs = 6000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();  // 超时正常继续，不阻塞后续句子
+    }, timeoutMs);
+    function cleanup() {
+      clearTimeout(timer);
+      window.removeEventListener('message', onMsg);
+    }
+    function onMsg(e) {
+      if (e.source !== frame.contentWindow) return;
+      if (settled) return;
+      if (e.data?.type === 'digital-human-speech-ended') { settled = true; cleanup(); resolve(); }
+      if (e.data?.type === 'digital-human-speech-error') { settled = true; cleanup(); resolve(); }
+    }
+    window.addEventListener('message', onMsg);
+  });
+}
+
+function splitSentences(text) {
+  // 按句末标点切分后合并短句，控制每段 40~350 字，减少 TTS 请求数
+  const raw = text.split(/(?<=[。！？!?])/).map(s => s.trim()).filter(Boolean);
+  const chunks = [];
+  let buf = '';
+  for (const s of raw) {
+    if (buf && buf.length + s.length > 350) { chunks.push(buf); buf = s; }
+    else { buf += s; }
+  }
+  if (buf.trim()) chunks.push(buf.trim());
+  return chunks.length ? chunks : [text];
+}
+
+async function fetchTTSOnce(text) {
+  const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+  if (!r.ok) throw new Error('TTS合成失败');
+  return await r.json();
+}
+
+async function speak(text, emo, ges) {
+  const chunks = splitSentences(text);
+  if (!chunks.length) return;
+  const token = ++speechCancelToken;
+  $('txtSpeechQueue').textContent = '🔊 合成中...';
+
+  // 流式 TTS：所有句子并行发起请求
+  const pending = chunks.map((text, i) =>
+    fetchTTSOnce(text).then(r => ({ ...r, _idx: i }))
+  );
+
+  // 按顺序取，但不等全部——每取到一句就播一句
+  // 播放期间后续句子继续并行合成，大幅减少首句延迟
+  const pendingMap = new Map(pending.map((p, i) => [i, p]));
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (speechCancelToken !== token) return;
+
+    // 等待第 i 句就绪（此时后续句子可能也一起就绪了）
+    const p = await pendingMap.get(i);
+    if (!p) break;
+
+    const isFirst = i === 0;
+    frame.contentWindow.postMessage({
+      type: 'digital-human-speak',
+      text: chunks[i],
+      emotion: isFirst ? emo : 'relaxed',
+      gesture: isFirst ? ges : 'idle',
+      audio: p.audio,
+      audio_mime: p.audio_mime || 'audio/mpeg',
+      pinyin: p.pinyin || [],
+      duration: p.duration || 0
+    }, '*');
+    $('txtSpeechQueue').textContent = '🔊 ' + (i + 1) + '/' + chunks.length;
+
+    // 播放期间后续 TTS 异步进行，不阻塞
+    await waitSpeech();
+  }
+  $('txtSpeechQueue').textContent = '';
+}
+
+function routeAction(p) { return (p?.data || p)?.route_action || null; }
+
+function openRoute(a) {
+  if (!a || a.type !== 'open_map_navigation' || !a.target_spot_id) return;
+  localStorage.removeItem('lingshanGuideActiveRoute');
+  localStorage.setItem('lingshanGuideTargetSpot', JSON.stringify({ id: a.target_spot_id, name: a.target_spot_name || '' }));
+  const q = new URLSearchParams({ target_spot_id: String(a.target_spot_id) });
+  if (a.target_spot_name) q.set('target_name', a.target_spot_name);
+  location.href = '/digital-human-3d/map?' + q;
+}
+
+async function ask(value) {
+  const text = value.trim();
+  if (!text || busy) return;
+
+  // 取消之前的语音播放
+  speechCancelToken++;
+  addBubble('user', text);
+  input.value = '';
+  setBusy(true);
+  $('txtSpeechQueue').textContent = '⏳ 思考中...';
+
+  try {
+    const body = { question: text };
+    if (sessionId) body.session_id = sessionId;
+
+    // 尝试读取位置信息（如果在地图页面设置过）
+    try {
+      const loc = JSON.parse(localStorage.getItem('lingshanGuideCurrentLocation') || 'null');
+      if (loc) body.location = loc;
+    } catch {}
+    body.active_route_id = localStorage.getItem('lingshanGuideActiveRoute') || '';
+
+    const r = await fetch('/api/digital-human/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const p = await r.json();
+    if (!r.ok || p.code !== 200) throw new Error(p.msg || '接口异常');
+
+    const d = p.data || p;
+    sessionId = d.session_id || sessionId;
+    if (sessionId) localStorage.setItem('digitalHuman3dSessionId', sessionId);
+
+    const reply = d.reply || '暂时没有回答。';
+
+    // 显示回答 + 元信息
+    const metaParts = [];
+    if (d.source) metaParts.push('来源: ' + d.source);
+    if (d.emotion) metaParts.push('情感: ' + d.emotion);
+    if (d.gesture) metaParts.push('手势: ' + d.gesture);
+    addBubble('assistant', reply, metaParts.join(' | '));
+
+    $('footSource').textContent = '来源：' + (d.source || '--');
+    $('footSession').textContent = '会话：' + sessionId.slice(0, 12) + '...';
+
+    const emo = d.emotion || emotion(reply);
+    const ges = d.gesture || gesture(reply, emo);
+
+    $('txtSpeechQueue').textContent = '🔊 开始朗读...';
+    await speak(reply, emo, ges);
+
+    // 导航动作
+    openRoute(routeAction(p));
+
+  } catch (err) {
+    addBubble('assistant', '❌ ' + (err.message || '服务暂不可用'));
+    $('txtSpeechQueue').textContent = '';
+  } finally {
+    setBusy(false);
+    $('txtSpeechQueue').textContent = '';
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   4. 语音输入（ASR）
+   ═══════════════════════════════════════════════════ */
+
+async function toggleRecording() {
+  if (mediaRecorder?.state === 'recording') {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      recordBtn.classList.remove('recording');
+      recordBtn.textContent = '🎤';
+      try {
+        $('txtSpeechQueue').textContent = '🎙 识别中...';
+        const form = new FormData();
+        form.append('file', new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' }), 'voice.webm');
+        const r = await fetch('/api/asr/transcribe?language=zh', { method: 'POST', body: form });
+        const p = await r.json();
+        const txt = p?.data?.text;
+        if (!txt) throw new Error(p.msg || '识别失败');
+        input.value = txt;
+        $('txtSpeechQueue').textContent = '';
+        ask(txt);
+      } catch (e) {
+        addBubble('assistant', '语音识别失败：' + e.message);
+        $('txtSpeechQueue').textContent = '';
+      }
+    };
+    mediaRecorder.start();
+    recordBtn.classList.add('recording');
+    recordBtn.textContent = '⏹';
+    $('txtSpeechQueue').textContent = '🎙 聆听中...';
+  } catch {
+    addBubble('assistant', '无法访问麦克风，请在浏览器设置中允许麦克风权限。');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   5. 事件绑定 & 初始化
+   ═══════════════════════════════════════════════════ */
+
+$('composer').addEventListener('submit', e => { e.preventDefault(); ask(input.value); });
+recordBtn.addEventListener('click', toggleRecording);
+
+// 模型卡片点击切换
+document.querySelectorAll('.mcard').forEach(card => {
+  card.addEventListener('click', () => switchModel(card));
+});
+
+// Live2D iframe 加载完成
+frame.addEventListener('load', () => {
+  $('dotModel').className = 'dot g';
+  $('dotTTS').className = 'dot g';
+});
+
+// 初始化
+(async function init() {
+  await refreshActiveModel();
+  addBubble('assistant',
+    '你好，我是灵小游 🪷\n\n' +
+    '👆 点击上方卡片可切换 Haru / Hiyori / Mao 三个 Live2D 形象\n' +
+    '🔊 切换后 TTS 声音也会同步变化\n' +
+    '📡 右侧状态栏实时显示 Dify 知识库连接状态\n' +
+    '💬 输入问题即可体验完整交互链路：\n' +
+    '   DeepSeek AI → 情感识别 → 逐句TTS → Live2D口型同步',
+    '系统消息'
+  );
+})();
+</script>
+</body>
+</html>
